@@ -3,7 +3,49 @@
  * Monitors Gmail page for email changes, extracts and auto-fills OTP
  */
 
-import { CONFIG } from '../config/constants.js';
+// Inline constants for content script (cannot use ES modules)
+const CONFIG = {
+  LANGUAGES: {
+    CHINESE: 'zh',
+    ENGLISH: 'en',
+    SPANISH: 'es',
+    ITALIAN: 'it',
+    AUTO: 'auto'
+  },
+  ACTIONS: {
+    EXTRACT_OTP: 'extractOTP',
+    FILL_OTP: 'fillOTP'
+  },
+  STORAGE_KEYS: {
+    LATEST_OTP: 'latestOTP'
+  },
+  OTP: {
+    EXPIRY_TIME: 5 * 60 * 1000,
+    CONTEXT_LENGTH: 200
+  },
+  GMAIL_SELECTORS: {
+    MAIN_CONTAINER: '[role="main"]',
+    THREAD: '[data-thread-id]',
+    MESSAGE_ID: '[data-message-id]',
+    EMAIL_PREVIEW: '.y2',
+    EMAIL_BODY: '.yP',
+    THREAD_SNIPPET: '.thread-snippet'
+  },
+  OTP_KEYWORDS: [
+    'otp', 'verification', 'code', 'token', 'pin',
+    'verify', 'auth', 'security', 'confirm'
+  ],
+  DELAYS: {
+    EMAIL_CHANGE: 1000,
+    EMAIL_CLICK: 1000
+  },
+  UI: {
+    NOTIFICATION: {
+      DURATION: 3000,
+      POSITION: { top: '20px', right: '20px' }
+    }
+  }
+};
 
 class GmailMonitor {
   constructor() {
