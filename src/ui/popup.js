@@ -116,7 +116,11 @@ class PopupController {
 
         if (response && response.success) {
             if (response.status === 'downloading') {
-                this.setAiStatus('downloading', 'Model is downloading...');
+                // If we have progress info, display it; otherwise show generic message
+                const statusText = response.progress > 0 
+                    ? `Downloading model... ${response.progress}%` 
+                    : 'Model is downloading...';
+                this.setAiStatus('downloading', statusText);
             } else if (response.status === 'downloadable') {
                 this.setAiStatus('download-required', 'Download On-Device AI');
             } else if (response.status === 'ready') {

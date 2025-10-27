@@ -15,6 +15,7 @@ class BackgroundService {
     this.aiService = new AIService();
     this.otpEngine = new OTPEngine();
     this.offscreenCreated = false;
+    this.nanoDownloadProgress = 0; // Cache for current download progress
     this.init();
   }
 
@@ -77,6 +78,9 @@ class BackgroundService {
    * Handle Nano download progress updates and forward to popup
    */
   handleNanoDownloadProgress(progress) {
+    // Cache the current progress
+    this.nanoDownloadProgress = progress;
+    
     // This is a fire-and-forget message to the popup
     chrome.runtime.sendMessage({ action: 'nanoDownloadProgress', progress }).catch(() => {});
   }
@@ -246,11 +250,20 @@ class BackgroundService {
         action: CONFIG.ACTIONS.OFFSCREEN_TEST_CONNECTION
       });
 
+      // If downloading, attach the cached progress
+      if (result.status === 'downloading' && this.nanoDownloadProgress > 0) {
+        result.progress = this.nanoDownloadProgress;
+      } else if (result.status === 'ready') {
+        // Download completed, reset progress cache
+        this.nanoDownloadProgress = 0;
+      }
+
       console.log('🧪 Nano test result:', JSON.stringify(result, null, 2));
       console.log('🧪 Result breakdown:', {
         success: result.success,
         status: result.status,
         message: result.message,
+        progress: result.progress,
         error: result.error
       });
       sendResponse(result);
