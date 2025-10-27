@@ -57,10 +57,12 @@ class BackgroundService {
   }
 
   /**
-   * Extract OTP using three-tier intelligent engine:
-   * 1️⃣ Local regex matching (< 50ms, 90%+ coverage)
-   * 2️⃣ Gemini Nano (Chrome Prompt API, on-device)
-   * 3️⃣ Gemini API (cloud fallback)
+   * Extract OTP using two-tier engine:
+   * 1️⃣ Local regex matching (< 50ms, 90%+ coverage) - PRIMARY
+   * 2️⃣ Gemini API (cloud fallback) - if configured
+   * 
+   * Note: Gemini Nano integration is simplified for now.
+   * It can be added later in popup.js if needed.
    */
   async handleExtractOTP(request, sendResponse) {
     try {
@@ -70,32 +72,15 @@ class BackgroundService {
       const localResult = await this.otpEngine.extractOTP(emailContent, language);
       
       // Lowered confidence threshold for aggressive local-first strategy
-      if (localResult.success && localResult.confidence > 0.6) {
+      if (localResult.success && localResult.confidence > 0.5) {
         console.log(`✅ OTP found via local regex (confidence: ${localResult.confidence})`);
         sendResponse(localResult);
         return;
       }
 
-      console.log(`⚠️ Local regex confidence low (${localResult.confidence}), trying Gemini Nano...`);
+      console.log(`⚠️ Local regex confidence low (${localResult.confidence}), trying Gemini API fallback...`);
 
-      // Tier 2: Gemini Nano (via offscreen document)
-      try {
-        const nanoResult = await this.callOffscreenDocument({
-          action: CONFIG.ACTIONS.OFFSCREEN_EXTRACT_OTP,
-          emailContent,
-          language
-        });
-        
-        if (nanoResult?.success) {
-          console.log('✅ OTP found via Gemini Nano');
-          sendResponse(nanoResult);
-          return;
-        }
-      } catch (error) {
-        console.warn('⚠️ Gemini Nano failed, trying API fallback:', error.message);
-      }
-
-      // Tier 3: Gemini API (cloud fallback)
+      // Tier 2: Gemini API (cloud fallback) - if API key is configured
       try {
         const apiResult = await this.aiService.extractOTP(emailContent, language);
         console.log('✅ OTP found via Gemini API');
@@ -117,16 +102,14 @@ class BackgroundService {
 
   /**
    * Test Gemini Nano
+   * Note: Gemini Nano test is handled in popup.js directly
+   * since Prompt API requires a window context
    */
   async handleTestGeminiNano(sendResponse) {
-    try {
-      const result = await this.callOffscreenDocument({ 
-        action: CONFIG.ACTIONS.OFFSCREEN_TEST_CONNECTION
-      });
-      sendResponse(result);
-    } catch (error) {
-      sendResponse({ success: false, error: error.message });
-    }
+    sendResponse({ 
+      success: false, 
+      error: 'Gemini Nano test should be initiated from popup (requires window context)' 
+    });
   }
 
   /**
@@ -138,36 +121,6 @@ class BackgroundService {
       sendResponse(result);
     } catch (error) {
       sendResponse({ success: false, error: error.message });
-    }
-  }
-
-  /**
-   * Call offscreen document for Gemini Nano processing
-   */
-  async callOffscreenDocument(message) {
-    try {
-      // Check if offscreen API is available
-      if (!chrome.offscreen) {
-        throw new Error('Offscreen API not available in this Chrome version (requires Chrome 116+)');
-      }
-
-      const hasDocument = await chrome.offscreen.hasDocument();
-      
-      if (!hasDocument) {
-        await chrome.offscreen.createDocument({
-          url: CONFIG.OFFSCREEN.PATH,
-          reasons: [chrome.offscreen.Reason.USER_MEDIA],
-          justification: 'AI processing for OTP extraction using Gemini Nano.'
-        });
-        
-        // Wait for document initialization
-        await new Promise(resolve => setTimeout(resolve, CONFIG.OFFSCREEN.INIT_DELAY));
-      }
-
-      return await chrome.runtime.sendMessage(message);
-    } catch (error) {
-      console.error('Offscreen document error:', error);
-      throw error;
     }
   }
 }
