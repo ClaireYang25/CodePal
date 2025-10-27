@@ -9,6 +9,9 @@ export class OTPEngine {
     this.confidenceThreshold = 0.8;
   }
 
+  /**
+   * 初始化多语言识别规则
+   */
   initializeRules() {
     return {
       // 中文规则
@@ -72,9 +75,9 @@ export class OTPEngine {
       // 通用数字模式
       universal: {
         patterns: [
-          /(\d{6})/g,  // 6位数字
-          /(\d{4})/g,  // 4位数字
-          /(\d{8})/g   // 8位数字
+          /(\d{6})/g,
+          /(\d{4})/g,
+          /(\d{8})/g
         ],
         keywords: [],
         contexts: []
@@ -82,25 +85,27 @@ export class OTPEngine {
     };
   }
 
+  /**
+   * 从邮件内容中提取 OTP
+   * @param {string} content - 邮件内容
+   * @param {string} language - 语言代码 ('auto', 'zh', 'en', 'es', 'it')
+   * @returns {Promise<Object>} 提取结果
+   */
   async extractOTP(content, language = 'auto') {
     try {
-      // 清理内容
       const cleanContent = this.cleanContent(content);
-      
-      // 检测语言
       const detectedLanguage = language === 'auto' ? 
         this.detectLanguage(cleanContent) : language;
       
-      // 按优先级尝试匹配
       const results = [];
       
-      // 1. 特定语言规则
+      // 1. 特定语言规则匹配
       if (this.rules[detectedLanguage]) {
         const result = this.matchWithRules(cleanContent, this.rules[detectedLanguage]);
         if (result) results.push({ ...result, language: detectedLanguage, priority: 1 });
       }
       
-      // 2. 英文规则（作为备选）
+      // 2. 英文规则作为备选
       if (detectedLanguage !== 'en') {
         const result = this.matchWithRules(cleanContent, this.rules.en);
         if (result) results.push({ ...result, language: 'en', priority: 2 });
@@ -110,16 +115,14 @@ export class OTPEngine {
       const universalResult = this.matchWithRules(cleanContent, this.rules.universal);
       if (universalResult) results.push({ ...universalResult, language: 'universal', priority: 3 });
       
-      // 选择最佳结果
-      const bestResult = this.selectBestResult(results, cleanContent);
+      const bestResult = this.selectBestResult(results);
       
       return {
         success: bestResult ? bestResult.confidence >= this.confidenceThreshold : false,
         otp: bestResult ? bestResult.otp : null,
         confidence: bestResult ? bestResult.confidence : 0,
-        method: 'local',
-        language: bestResult ? bestResult.language : detectedLanguage,
-        context: bestResult ? bestResult.context : null
+        method: 'local-regex',
+        language: bestResult ? bestResult.language : detectedLanguage
       };
     } catch (error) {
       console.error('OTP extraction error:', error);
@@ -127,32 +130,38 @@ export class OTPEngine {
     }
   }
 
+  /**
+   * 清理邮件内容
+   */
   cleanContent(content) {
     return content
-      .replace(/\s+/g, ' ')  // 合并多个空格
-      .replace(/[^\w\s\d：:]/g, '')  // 移除特殊字符
+      .replace(/\s+/g, ' ')
+      .replace(/[^\w\s\d：:]/g, '')
       .trim();
   }
 
+  /**
+   * 检测语言
+   */
   detectLanguage(content) {
     const chineseRegex = /[\u4e00-\u9fff]/;
     const spanishRegex = /[ñáéíóúü]/i;
     const italianRegex = /[àèéìíîòóù]/i;
-    const englishRegex = /[a-zA-Z]/;
 
     if (chineseRegex.test(content)) return 'zh';
     if (spanishRegex.test(content)) return 'es';
     if (italianRegex.test(content)) return 'it';
-    if (englishRegex.test(content)) return 'en';
     
-    return 'universal';
+    return 'en';
   }
 
+  /**
+   * 使用规则匹配
+   */
   matchWithRules(content, rules) {
     let bestMatch = null;
     let highestConfidence = 0;
 
-    // 尝试所有模式
     for (const pattern of rules.patterns) {
       const matches = content.match(pattern);
       if (matches && matches[1]) {
@@ -161,11 +170,7 @@ export class OTPEngine {
         
         if (confidence > highestConfidence) {
           highestConfidence = confidence;
-          bestMatch = {
-            otp: otp,
-            confidence: confidence,
-            context: this.extractContext(content, matches[0])
-          };
+          bestMatch = { otp, confidence };
         }
       }
     }
@@ -173,72 +178,54 @@ export class OTPEngine {
     return bestMatch;
   }
 
+  /**
+   * 计算置信度
+   */
   calculateConfidence(content, otp, rules) {
-    let confidence = 0.5; // 基础置信度
+    let confidence = 0.5;
     
-    // 关键词匹配加分
+    // 关键词匹配
     const keywordMatches = rules.keywords.filter(keyword => 
       content.toLowerCase().includes(keyword.toLowerCase())
     ).length;
     confidence += keywordMatches * 0.1;
     
-    // 上下文匹配加分
+    // 上下文匹配
     const contextMatches = rules.contexts.filter(context => 
       content.toLowerCase().includes(context.toLowerCase())
     ).length;
     confidence += contextMatches * 0.15;
     
-    // OTP 长度加分
+    // OTP 长度评分
     if (otp.length === 6) confidence += 0.2;
     else if (otp.length === 4) confidence += 0.15;
     else if (otp.length >= 4 && otp.length <= 8) confidence += 0.1;
     
-    // 位置加分（邮件开头或结尾的 OTP 更可信）
-    const otpPosition = content.indexOf(otp);
-    const contentLength = content.length;
-    if (otpPosition < contentLength * 0.1 || otpPosition > contentLength * 0.9) {
-      confidence += 0.1;
-    }
-    
     return Math.min(confidence, 1.0);
   }
 
-  extractContext(content, match) {
-    const matchIndex = content.indexOf(match);
-    const start = Math.max(0, matchIndex - 50);
-    const end = Math.min(content.length, matchIndex + match.length + 50);
-    return content.substring(start, end);
-  }
-
-  selectBestResult(results, content) {
+  /**
+   * 选择最佳结果
+   */
+  selectBestResult(results) {
     if (results.length === 0) return null;
     
-    // 按优先级和置信度排序
     results.sort((a, b) => {
-      if (a.priority !== b.priority) {
-        return a.priority - b.priority;
-      }
+      if (a.priority !== b.priority) return a.priority - b.priority;
       return b.confidence - a.confidence;
     });
     
     return results[0];
   }
 
-  // 验证 OTP 格式
+  /**
+   * 验证 OTP 格式
+   */
   isValidOTP(otp) {
     if (!otp || typeof otp !== 'string') return false;
-    
-    // 检查是否为纯数字
     if (!/^\d+$/.test(otp)) return false;
-    
-    // 检查长度（通常 4-8 位）
     if (otp.length < 4 || otp.length > 8) return false;
-    
     return true;
   }
-
-  // 获取支持的语言列表
-  getSupportedLanguages() {
-    return Object.keys(this.rules).filter(lang => lang !== 'universal');
-  }
 }
+

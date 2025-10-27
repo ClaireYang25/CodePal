@@ -3,6 +3,7 @@
   "name": "Gmail OTP AutoFill",
   "version": "1.0.0",
   "description": "智能识别 Gmail 中的一次性验证码并自动填充到目标网页",
+  
   "permissions": [
     "activeTab",
     "storage",
@@ -10,41 +11,42 @@
     "scripting",
     "offscreen"
   ],
+  
   "optional_permissions": [
     "modelAccess"
   ],
+  
   "host_permissions": [
     "https://mail.google.com/*",
     "https://accounts.google.com/*"
   ],
+  
   "background": {
-    "service_worker": "src/background.js",
+    "service_worker": "src/background/service-worker.js",
     "type": "module"
   },
+  
   "content_scripts": [
     {
       "matches": ["https://mail.google.com/*"],
-      "js": ["src/content_script.js"],
+      "js": ["src/content/gmail-monitor.js"],
       "run_at": "document_end"
     }
   ],
+  
   "action": {
     "default_popup": "src/ui/popup.html",
     "default_title": "Gmail OTP AutoFill"
   },
-  "web_accessible_resources": [
-    {
-      "resources": ["src/otp-engine.js", "src/ai-service.js", "src/chrome-prompt-api.js"],
-      "matches": ["<all_urls>"]
-    }
-  ],
+  
   "icons": {
     "16": "assets/icons/icon16.png",
     "48": "assets/icons/icon48.png",
     "128": "assets/icons/icon128.png"
   },
+  
   "offscreen": {
-    "path": "src/offscreen.html",
+    "path": "src/offscreen/offscreen.html",
     "reasons": ["USER_MEDIA"],
     "justification": "Required for AI processing via the Chrome Prompt API (Gemini Nano)."
   }

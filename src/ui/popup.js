@@ -1,6 +1,6 @@
 /**
- * Gmail OTP AutoFill - Popup 脚本
- * 处理弹窗界面的交互和状态管理
+ * Gmail OTP AutoFill - Popup Controller
+ * 管理扩展弹窗的交互和状态
  */
 
 class PopupController {
@@ -44,15 +44,12 @@ class PopupController {
 
   async updateStatus() {
     try {
-      // 检查 Gmail 连接状态
       const gmailStatus = await this.checkGmailStatus();
       this.updateStatusElement('gmail-status', gmailStatus.text, gmailStatus.class);
 
-      // 检查 AI 服务状态
       const aiStatus = await this.checkAIStatus();
       this.updateStatusElement('ai-status', aiStatus.text, aiStatus.class);
 
-      // 获取最新 OTP
       const latestOTP = await this.getLatestOTP();
       this.updateStatusElement('latest-otp', latestOTP.text, latestOTP.class);
     } catch (error) {
@@ -97,7 +94,7 @@ class PopupController {
   }
 
   isRecentOTP(timestamp) {
-    return (Date.now() - timestamp) < 5 * 60 * 1000; // 5分钟内有效
+    return (Date.now() - timestamp) < 5 * 60 * 1000;
   }
 
   updateStatusElement(elementId, text, className) {
@@ -109,45 +106,39 @@ class PopupController {
   }
 
   setupEventListeners() {
-    // Gmail 连接按钮
-    document.getElementById('connect-gmail').addEventListener('click', () => {
+    document.getElementById('connect-gmail')?.addEventListener('click', () => {
       this.connectGmail();
     });
 
-    // Chrome Prompt API 测试按钮
-    document.getElementById('test-chrome-prompt-api').addEventListener('click', () => {
-      this.testChromePromptAPI();
+    document.getElementById('test-chrome-prompt-api')?.addEventListener('click', () => {
+      this.testGeminiNano();
     });
 
-    // Gemini API 测试按钮
-    document.getElementById('test-gemini-api').addEventListener('click', () => {
+    document.getElementById('test-gemini-api')?.addEventListener('click', () => {
       this.testGeminiAPI();
     });
 
-    // 清除数据按钮
-    document.getElementById('clear-data').addEventListener('click', () => {
+    document.getElementById('clear-data')?.addEventListener('click', () => {
       this.clearData();
     });
 
-    // API 密钥保存按钮
-    document.getElementById('save-api-key').addEventListener('click', () => {
+    document.getElementById('save-api-key')?.addEventListener('click', () => {
       this.saveAPIKey();
     });
 
-    // 设置开关
-    document.getElementById('auto-fill-toggle').addEventListener('click', () => {
+    document.getElementById('auto-fill-toggle')?.addEventListener('click', () => {
       this.toggleSetting('autoFill');
     });
 
-    document.getElementById('chrome-prompt-api-toggle').addEventListener('click', () => {
+    document.getElementById('chrome-prompt-api-toggle')?.addEventListener('click', () => {
       this.toggleSetting('chromePromptAPI');
     });
 
-    document.getElementById('gemini-api-toggle').addEventListener('click', () => {
+    document.getElementById('gemini-api-toggle')?.addEventListener('click', () => {
       this.toggleSetting('geminiAPI');
     });
 
-    document.getElementById('notification-toggle').addEventListener('click', () => {
+    document.getElementById('notification-toggle')?.addEventListener('click', () => {
       this.toggleSetting('notifications');
     });
   }
@@ -174,22 +165,21 @@ class PopupController {
     }
   }
 
-  async testChromePromptAPI() {
+  async testGeminiNano() {
     const button = document.getElementById('test-chrome-prompt-api');
     button.classList.add('loading');
     button.textContent = '测试中...';
 
     try {
-      const response = await this.sendMessage({ action: 'testChromePromptAPI' });
+      const response = await this.sendMessage({ action: 'testGeminiNano' });
       
       if (response.success) {
-        this.showMessage('Chrome Prompt API 测试成功！', 'success');
-        await this.updateStatus();
+        this.showMessage('Gemini Nano 测试成功！', 'success');
       } else {
-        this.showMessage(`Chrome Prompt API 测试失败: ${response.error}`, 'error');
+        this.showMessage(`Gemini Nano 测试失败: ${response.error}`, 'error');
       }
     } catch (error) {
-      this.showMessage(`Chrome Prompt API 测试错误: ${error.message}`, 'error');
+      this.showMessage(`测试错误: ${error.message}`, 'error');
     } finally {
       button.classList.remove('loading');
       button.textContent = '测试 Chrome Prompt API';
@@ -202,16 +192,15 @@ class PopupController {
     button.textContent = '测试中...';
 
     try {
-      const response = await this.sendMessage({ action: 'testAI' });
+      const response = await this.sendMessage({ action: 'testGeminiAPI' });
       
       if (response.success) {
         this.showMessage('Gemini API 测试成功！', 'success');
-        await this.updateStatus();
       } else {
         this.showMessage(`Gemini API 测试失败: ${response.error}`, 'error');
       }
     } catch (error) {
-      this.showMessage(`Gemini API 测试错误: ${error.message}`, 'error');
+      this.showMessage(`测试错误: ${error.message}`, 'error');
     } finally {
       button.classList.remove('loading');
       button.textContent = '测试 Gemini API';
@@ -219,13 +208,11 @@ class PopupController {
   }
 
   async clearData() {
-    if (confirm('确定要清除所有数据吗？这将删除所有存储的 OTP 和设置。')) {
+    if (confirm('确定要清除所有数据吗？')) {
       try {
-        await this.sendMessage({ action: 'clearData' });
+        await chrome.storage.local.clear();
         this.showMessage('数据已清除', 'success');
         await this.updateStatus();
-        await this.loadSettings();
-        this.updateUI();
       } catch (error) {
         this.showMessage(`清除失败: ${error.message}`, 'error');
       }
@@ -241,11 +228,7 @@ class PopupController {
     }
 
     try {
-      await this.sendMessage({ 
-        action: 'saveAPIKey', 
-        apiKey: apiKey 
-      });
-      
+      await chrome.storage.local.set({ geminiApiKey: apiKey });
       this.showMessage('API 密钥已保存', 'success');
       document.getElementById('api-key-input').value = '';
       await this.updateStatus();
@@ -261,11 +244,10 @@ class PopupController {
   }
 
   updateUI() {
-    // 更新开关状态
-    document.getElementById('auto-fill-toggle').classList.toggle('active', this.settings.autoFill);
-    document.getElementById('chrome-prompt-api-toggle').classList.toggle('active', this.settings.chromePromptAPI);
-    document.getElementById('gemini-api-toggle').classList.toggle('active', this.settings.geminiAPI);
-    document.getElementById('notification-toggle').classList.toggle('active', this.settings.notifications);
+    document.getElementById('auto-fill-toggle')?.classList.toggle('active', this.settings.autoFill);
+    document.getElementById('chrome-prompt-api-toggle')?.classList.toggle('active', this.settings.chromePromptAPI);
+    document.getElementById('gemini-api-toggle')?.classList.toggle('active', this.settings.geminiAPI);
+    document.getElementById('notification-toggle')?.classList.toggle('active', this.settings.notifications);
   }
 
   sendMessage(message) {
@@ -281,31 +263,22 @@ class PopupController {
   }
 
   showMessage(text, type) {
-    // 移除现有消息
     const existingMessage = document.querySelector('.error, .success');
-    if (existingMessage) {
-      existingMessage.remove();
-    }
+    if (existingMessage) existingMessage.remove();
 
-    // 创建新消息
     const message = document.createElement('div');
     message.className = type;
     message.textContent = text;
     
-    // 插入到内容区域顶部
     const content = document.querySelector('.content');
     content.insertBefore(message, content.firstChild);
 
-    // 3秒后自动移除
-    setTimeout(() => {
-      if (message.parentNode) {
-        message.parentNode.removeChild(message);
-      }
-    }, 3000);
+    setTimeout(() => message.remove(), 3000);
   }
 }
 
-// 初始化弹窗控制器
+// 初始化
 document.addEventListener('DOMContentLoaded', () => {
   new PopupController();
 });
+
