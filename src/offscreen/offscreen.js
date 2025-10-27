@@ -289,6 +289,13 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
 async function handleMessage(request, sendResponse) {
   try {
     console.log('📬 Offscreen received message:', JSON.stringify(request, null, 2));
+    
+    // Only process messages targeted to offscreen
+    if (request.target !== 'offscreen') {
+      console.log('⏭️ Message not for offscreen, ignoring');
+      return;
+    }
+    
     const { action } = request;
 
     switch (action) {

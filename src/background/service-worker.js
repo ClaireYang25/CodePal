@@ -43,6 +43,11 @@ class BackgroundService {
    */
   async handleMessage(request, sender, sendResponse) {
     try {
+      // Ignore messages meant for offscreen document
+      if (request.target === 'offscreen') {
+        return;
+      }
+
       const handlers = {
         [CONFIG.ACTIONS.EXTRACT_OTP]: () => this.handleExtractOTP(request, sendResponse),
         [CONFIG.ACTIONS.TEST_GEMINI_NANO]: () => this.handleTestGeminiNano(sendResponse),
@@ -205,7 +210,9 @@ class BackgroundService {
       }
 
       // Send message to offscreen document
-      const response = await chrome.runtime.sendMessage(message);
+      // Add a target flag to ensure only offscreen document processes it
+      const targetedMessage = { ...message, target: 'offscreen' };
+      const response = await chrome.runtime.sendMessage(targetedMessage);
       return response;
 
     } catch (error) {
