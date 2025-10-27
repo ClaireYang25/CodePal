@@ -164,17 +164,48 @@ class PopupController {
     async triggerNanoDownload() {
         this.setAiStatus('downloading', 'Starting download...');
         
-        // Send the forceDownload action which will create the session with user gesture
-        const result = await this.sendMessage({ action: 'triggerNanoDownload' });
-        
-        if (result.success) {
-            // Download started successfully
-            this.setAiStatus('downloading', 'Downloading model...');
-            // Check status periodically
+        try {
+            // Call Nano directly from popup (we have window and user gesture here)
+            console.log('🚀 Starting Nano download directly from popup...');
+            
+            // Check API availability
+            if (typeof globalThis.LanguageModel === 'undefined') {
+                throw new Error('LanguageModel API not available');
+            }
+            
+            const availability = await globalThis.LanguageModel.availability();
+            console.log('📊 Availability:', availability);
+            
+            if (availability === 'no') {
+                throw new Error('Gemini Nano not supported on this device');
+            }
+            
+            // Create session - this will trigger download if needed
+            console.log('📝 Creating LanguageModel session...');
+            const session = await globalThis.LanguageModel.create({
+                systemPrompt: 'You are a verification code extraction assistant.',
+                monitor(m) {
+                    m.addEventListener('downloadprogress', (e) => {
+                        const progress = Math.round(e.loaded * 100);
+                        console.log(`⏬ Download progress: ${progress}%`);
+                        // Update UI directly
+                        document.getElementById('ai-status-text').textContent = `Downloading model... ${progress}%`;
+                    });
+                }
+            });
+            
+            console.log('✅ Session created successfully');
+            
+            // Clean up the session immediately (we just wanted to trigger download)
+            await session.destroy();
+            console.log('🗑️ Session destroyed');
+            
+            // Now check status via background to verify
             this.checkDownloadProgress();
-        } else {
-            // Download failed
-            this.setAiStatus('error', result.error || 'Download failed');
+            
+        } catch (error) {
+            console.error('❌ Download failed:', error);
+            this.setAiStatus('error', error.message || 'Download failed');
         }
     }
 
