@@ -7,12 +7,7 @@
   "permissions": [
     "activeTab",
     "storage",
-    "scripting",
-    "offscreen"
-  ],
-  
-  "optional_permissions": [
-    "modelAccess"
+    "scripting"
   ],
   
   "host_permissions": [
@@ -41,11 +36,5 @@
     "16": "assets/icons/icon16.png",
     "48": "assets/icons/icon48.png",
     "128": "assets/icons/icon128.png"
-  },
-  
-  "offscreen": {
-    "path": "src/offscreen/offscreen.html",
-    "reasons": ["USER_MEDIA"],
-    "justification": "Required for AI processing via the Chrome Prompt API (Gemini Nano)."
   }
 }

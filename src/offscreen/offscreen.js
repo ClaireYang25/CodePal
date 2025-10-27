@@ -31,8 +31,9 @@ async function initializeNano() {
       console.log('⏬ Gemini Nano needs to be downloaded...');
     }
 
-    // Create session
+    // Create session with output language specification
     session = await globalThis.LanguageModel.create({
+      systemPrompt: 'You are a verification code extraction assistant. Always respond in English.',
       monitor(m) {
         m.addEventListener('downloadprogress', (e) => {
           console.log(`⏬ Model download: ${Math.round(e.loaded * 100)}%`);

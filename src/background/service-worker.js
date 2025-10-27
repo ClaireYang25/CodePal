@@ -146,6 +146,11 @@ class BackgroundService {
    */
   async callOffscreenDocument(message) {
     try {
+      // Check if offscreen API is available
+      if (!chrome.offscreen) {
+        throw new Error('Offscreen API not available in this Chrome version (requires Chrome 116+)');
+      }
+
       const hasDocument = await chrome.offscreen.hasDocument();
       
       if (!hasDocument) {
