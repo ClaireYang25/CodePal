@@ -177,7 +177,12 @@ class PopupController {
       });
       
       if (response.success) {
-        this.showMessage(`${UI_TEXT.MESSAGES.NANO_SUCCESS} Response: ${response.response}`, 'success');
+        // Handle the special 'downloading' status
+        if (response.status === 'downloading') {
+            this.showMessage(response.message, 'info');
+        } else {
+            this.showMessage(`${UI_TEXT.MESSAGES.NANO_SUCCESS} Response: ${response.response}`, 'success');
+        }
       } else {
         this.showMessage(`${UI_TEXT.MESSAGES.NANO_ERROR}: ${response.error}`, 'error');
       }

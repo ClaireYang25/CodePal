@@ -16,9 +16,9 @@ async function initializeNano() {
   try {
     // Check if LanguageModel API is available
     if (typeof globalThis.LanguageModel === 'undefined') {
-      console.error('❌ LanguageModel API not available');
-      console.error('Enable: chrome://flags/#prompt-api-for-gemini-nano');
-      return false;
+      const errorMsg = 'LanguageModel API not available. Enable: chrome://flags/#prompt-api-for-gemini-nano';
+      console.error(`❌ ${errorMsg}`);
+      return { success: false, error: errorMsg, status: 'unavailable' };
     }
 
     // Check availability
@@ -26,12 +26,15 @@ async function initializeNano() {
     console.log('📊 Gemini Nano availability:', availability);
 
     if (availability === 'no') {
-      console.error('❌ Gemini Nano not available on this device');
-      return false;
+      const errorMsg = 'Gemini Nano not available on this device. Check hardware requirements.';
+      console.error(`❌ ${errorMsg}`);
+      return { success: false, error: errorMsg, status: 'unavailable' };
     }
 
     if (availability === 'after-download') {
-      console.log('⏬ Gemini Nano needs to be downloaded first...');
+      console.log('⏬ Gemini Nano model needs to be downloaded...');
+      // We will proceed to create(), which triggers the download.
+      // We can inform the user that a download is starting.
     }
 
     // Create session with proper output language configuration
@@ -49,11 +52,11 @@ async function initializeNano() {
 
     console.log('✅ Gemini Nano session created successfully');
     isInitialized = true;
-    return true;
+    return { success: true, status: 'ready' };
 
   } catch (error) {
     console.error('❌ Failed to initialize Gemini Nano:', error);
-    return false;
+    return { success: false, error: error.message, status: 'error' };
   }
 }
 
@@ -64,11 +67,11 @@ async function extractOTPWithNano(emailContent, language) {
   try {
     // Ensure initialization
     if (!isInitialized) {
-      const success = await initializeNano();
-      if (!success) {
+      const initResult = await initializeNano();
+      if (!initResult.success) {
         return {
           success: false,
-          error: 'Gemini Nano not available'
+          error: initResult.error
         };
       }
     }
@@ -153,12 +156,16 @@ function parseNanoResponse(response) {
 async function testNanoConnection() {
   try {
     if (!isInitialized) {
-      const success = await initializeNano();
-      if (!success) {
-        return {
-          success: false,
-          error: 'Failed to initialize Nano'
-        };
+      const initResult = await initializeNano();
+      if (!initResult.success) {
+        // If it needs downloading, that's not a hard error for a test,
+        // it's an expected state.
+        if (initResult.status === 'unavailable') {
+           return { success: false, error: initResult.error };
+        }
+        // For 'after-download', the create() call inside initializeNano already started it.
+        // Let's return a specific message.
+        return { success: true, message: 'Model is downloading. Please wait a few minutes and try again.', status: 'downloading' };
       }
     }
 
