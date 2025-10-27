@@ -22,9 +22,20 @@ async function initializeNano() {
       return { success: false, error: errorMsg, status: 'unavailable' };
     }
 
-    // Check availability
-    const availability = await globalThis.LanguageModel.availability();
+    // Check availability with output language expectation
+    const availabilityOpts = { expectedOutputs: [{ type: 'text', language: 'en' }] };
+    const availability = await globalThis.LanguageModel.availability(availabilityOpts);
     console.log('📊 Gemini Nano availability:', availability);
+    console.log('📊 availability typeof:', typeof availability);
+    console.log('📊 availability toString:', String(availability));
+    console.log('📊 availability lower:', String(availability).toLowerCase());
+    try {
+      const params = await globalThis.LanguageModel.params?.();
+      if (params) console.log('⚙️ LanguageModel.params:', params);
+    } catch (e) {
+      console.log('⚠️ Unable to read LanguageModel.params():', e?.message || e);
+    }
+    console.log('👆 navigator.userActivation.isActive:', !!(navigator.userActivation && navigator.userActivation.isActive));
     
     const availabilityLower = String(availability).toLowerCase();
 
@@ -58,6 +69,7 @@ async function initializeNano() {
     console.log('📝 Creating Nano session...');
     nanoSession = await globalThis.LanguageModel.create({
       systemPrompt: 'You are a verification code extraction assistant. Always respond in English with valid JSON format.',
+      expectedOutputs: [{ type: 'text', language: 'en' }],
       monitor(m) {
         m.addEventListener('downloadprogress', (e) => {
           console.log(`⏬ Nano model download: ${Math.round(e.loaded * 100)}%`);
@@ -185,7 +197,11 @@ async function testNanoConnection() {
 
     // Not initialized yet, check availability
     const initResult = await initializeNano();
-    
+    try {
+      console.log('🧪 testNanoConnection initResult:', JSON.stringify(initResult));
+    } catch (_) {
+      console.log('🧪 testNanoConnection initResult (non-serializable):', initResult);
+    }
     // Return the init result directly - it contains the correct status
     // This could be 'downloadable', 'downloading', 'ready', or 'unavailable'
     return initResult;

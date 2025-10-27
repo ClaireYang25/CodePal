@@ -41,7 +41,7 @@
   
   "offscreen": {
     "path": "src/offscreen/offscreen.html",
-    "reasons": ["USER_MEDIA"],
+    "reasons": ["IFRAME_SCRIPTING"],
     "justification": "Required for running Gemini Nano (Chrome Prompt API) which needs a window context. Service Workers don't have window objects, so we use an offscreen document as a bridge."
   }
 }

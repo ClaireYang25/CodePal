@@ -197,7 +197,7 @@ class BackgroundService {
         
         await chrome.offscreen.createDocument({
           url: CONFIG.OFFSCREEN.PATH,
-          reasons: [chrome.offscreen.Reason.USER_MEDIA],
+          reasons: [chrome.offscreen.Reason.IFRAME_SCRIPTING],
           justification: 'Required for Gemini Nano execution (needs window context)'
         });
         

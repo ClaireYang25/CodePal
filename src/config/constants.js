@@ -14,7 +14,10 @@ export const CONFIG = {
     GEMINI_API_KEY: 'geminiApiKey',
     LATEST_OTP: 'latestOTP',
     POPUP_SETTINGS: 'popupSettings',
-    AI_USAGE_STATS: 'aiUsageStats'
+    AI_USAGE_STATS: 'aiUsageStats',
+    NANO_DOWNLOAD_STATE: 'nanoDownloadState',
+    NANO_DOWNLOAD_STARTED_AT: 'nanoDownloadStartedAt',
+    NANO_DOWNLOAD_PROGRESS: 'nanoDownloadProgress'
   },
   
   // API Configuration
