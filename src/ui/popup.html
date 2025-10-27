@@ -1,0 +1,315 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Gmail OTP AutoFill</title>
+    <style>
+        body {
+            width: 350px;
+            min-height: 400px;
+            margin: 0;
+            padding: 0;
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+        }
+
+        .header {
+            padding: 20px;
+            text-align: center;
+            background: rgba(255, 255, 255, 0.1);
+            backdrop-filter: blur(10px);
+        }
+
+        .header h1 {
+            margin: 0;
+            font-size: 18px;
+            font-weight: 600;
+        }
+
+        .header p {
+            margin: 5px 0 0 0;
+            font-size: 12px;
+            opacity: 0.8;
+        }
+
+        .content {
+            padding: 20px;
+        }
+
+        .status-card {
+            background: rgba(255, 255, 255, 0.15);
+            border-radius: 12px;
+            padding: 15px;
+            margin-bottom: 15px;
+            backdrop-filter: blur(10px);
+        }
+
+        .status-item {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 10px;
+        }
+
+        .status-item:last-child {
+            margin-bottom: 0;
+        }
+
+        .status-label {
+            font-size: 14px;
+            font-weight: 500;
+        }
+
+        .status-value {
+            font-size: 12px;
+            padding: 4px 8px;
+            border-radius: 6px;
+            background: rgba(255, 255, 255, 0.2);
+        }
+
+        .status-value.connected {
+            background: rgba(76, 175, 80, 0.3);
+        }
+
+        .status-value.disconnected {
+            background: rgba(244, 67, 54, 0.3);
+        }
+
+        .button {
+            width: 100%;
+            padding: 12px;
+            border: none;
+            border-radius: 8px;
+            font-size: 14px;
+            font-weight: 500;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            margin-bottom: 10px;
+        }
+
+        .button.primary {
+            background: rgba(255, 255, 255, 0.2);
+            color: white;
+            border: 1px solid rgba(255, 255, 255, 0.3);
+        }
+
+        .button.primary:hover {
+            background: rgba(255, 255, 255, 0.3);
+        }
+
+        .button.secondary {
+            background: transparent;
+            color: white;
+            border: 1px solid rgba(255, 255, 255, 0.5);
+        }
+
+        .button.secondary:hover {
+            background: rgba(255, 255, 255, 0.1);
+        }
+
+        .settings-section {
+            margin-top: 20px;
+        }
+
+        .settings-title {
+            font-size: 16px;
+            font-weight: 600;
+            margin-bottom: 15px;
+        }
+
+        .setting-item {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 12px;
+        }
+
+        .setting-label {
+            font-size: 14px;
+        }
+
+        .toggle {
+            position: relative;
+            width: 50px;
+            height: 24px;
+            background: rgba(255, 255, 255, 0.3);
+            border-radius: 12px;
+            cursor: pointer;
+            transition: background 0.3s ease;
+        }
+
+        .toggle.active {
+            background: rgba(76, 175, 80, 0.8);
+        }
+
+        .toggle::after {
+            content: '';
+            position: absolute;
+            top: 2px;
+            left: 2px;
+            width: 20px;
+            height: 20px;
+            background: white;
+            border-radius: 50%;
+            transition: transform 0.3s ease;
+        }
+
+        .toggle.active::after {
+            transform: translateX(26px);
+        }
+
+        .input-group {
+            margin-bottom: 15px;
+        }
+
+        .input-label {
+            display: block;
+            font-size: 12px;
+            margin-bottom: 5px;
+            opacity: 0.8;
+        }
+
+        .input-field {
+            width: 100%;
+            padding: 10px;
+            border: 1px solid rgba(255, 255, 255, 0.3);
+            border-radius: 6px;
+            background: rgba(255, 255, 255, 0.1);
+            color: white;
+            font-size: 14px;
+            box-sizing: border-box;
+        }
+
+        .input-field::placeholder {
+            color: rgba(255, 255, 255, 0.6);
+        }
+
+        .privacy-notice {
+            background: rgba(255, 255, 255, 0.1);
+            border-radius: 8px;
+            padding: 12px;
+            margin-top: 15px;
+            font-size: 11px;
+            line-height: 1.4;
+            opacity: 0.8;
+        }
+
+        .footer {
+            padding: 15px 20px;
+            text-align: center;
+            font-size: 11px;
+            opacity: 0.7;
+            border-top: 1px solid rgba(255, 255, 255, 0.1);
+        }
+
+        .hidden {
+            display: none;
+        }
+
+        .loading {
+            opacity: 0.6;
+            pointer-events: none;
+        }
+
+        .error {
+            background: rgba(244, 67, 54, 0.3);
+            border: 1px solid rgba(244, 67, 54, 0.5);
+            color: white;
+            padding: 10px;
+            border-radius: 6px;
+            margin-bottom: 10px;
+            font-size: 12px;
+        }
+
+        .success {
+            background: rgba(76, 175, 80, 0.3);
+            border: 1px solid rgba(76, 175, 80, 0.5);
+            color: white;
+            padding: 10px;
+            border-radius: 6px;
+            margin-bottom: 10px;
+            font-size: 12px;
+        }
+    </style>
+</head>
+<body>
+    <div class="header">
+        <h1>Gmail OTP AutoFill</h1>
+        <p>智能验证码自动填充</p>
+    </div>
+
+    <div class="content">
+        <!-- 状态卡片 -->
+        <div class="status-card">
+            <div class="status-item">
+                <span class="status-label">Gmail 连接</span>
+                <span class="status-value" id="gmail-status">检查中...</span>
+            </div>
+            <div class="status-item">
+                <span class="status-label">AI 服务</span>
+                <span class="status-value" id="ai-status">检查中...</span>
+            </div>
+            <div class="status-item">
+                <span class="status-label">最新 OTP</span>
+                <span class="status-value" id="latest-otp">无</span>
+            </div>
+        </div>
+
+        <!-- 操作按钮 -->
+        <button class="button primary" id="connect-gmail">连接 Gmail</button>
+        <button class="button secondary" id="test-chrome-prompt-api">测试 Chrome Prompt API</button>
+        <button class="button secondary" id="test-gemini-api">测试 Gemini API</button>
+        <button class="button secondary" id="clear-data">清除数据</button>
+
+        <!-- 设置区域 -->
+        <div class="settings-section">
+            <div class="settings-title">设置</div>
+            
+            <div class="setting-item">
+                <span class="setting-label">自动填充</span>
+                <div class="toggle" id="auto-fill-toggle"></div>
+            </div>
+            
+            <div class="setting-item">
+                <span class="setting-label">Chrome Prompt API</span>
+                <div class="toggle" id="chrome-prompt-api-toggle"></div>
+            </div>
+            
+            <div class="setting-item">
+                <span class="setting-label">Gemini API 备用</span>
+                <div class="toggle" id="gemini-api-toggle"></div>
+            </div>
+            
+            <div class="setting-item">
+                <span class="setting-label">通知提醒</span>
+                <div class="toggle" id="notification-toggle"></div>
+            </div>
+        </div>
+
+        <!-- API 密钥设置 -->
+        <div class="input-group">
+            <label class="input-label">Gemini API 密钥</label>
+            <input type="password" class="input-field" id="api-key-input" placeholder="输入您的 Gemini API 密钥">
+            <button class="button secondary" id="save-api-key">保存密钥</button>
+        </div>
+
+        <!-- 隐私声明 -->
+        <div class="privacy-notice">
+            <strong>隐私保护：</strong><br>
+            • 仅使用 gmail.readonly 权限<br>
+            • 优先本地处理，AI 仅作增强<br>
+            • 不存储邮件内容<br>
+            • 遵循最小权限原则
+        </div>
+    </div>
+
+    <div class="footer">
+        <p>Gmail OTP AutoFill v1.0.0</p>
+        <p>保护您的隐私，提升使用体验</p>
+    </div>
+
+    <script src="popup.js"></script>
+</body>
+</html>
