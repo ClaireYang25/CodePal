@@ -110,17 +110,21 @@ class PopupController {
         this.setAiStatus('loading', 'Checking On-Device AI...');
         
         const response = await this.sendMessage({ action: CONFIG.ACTIONS.TEST_GEMINI_NANO });
+        console.log('📬 Popup received response from Service Worker:', JSON.stringify(response, null, 2));
 
-        if (response.success) {
+        if (response && response.success) {
             if (response.status === 'downloading') {
                 this.setAiStatus('downloading', 'Model is downloading...');
             } else if (response.status === 'downloadable') {
                 this.setAiStatus('download-required', 'Download On-Device AI');
+            } else if (response.status === 'ready') {
+                this.setAiStatus('ready', 'On-Device AI Ready');
             } else {
+                // Handle cases where success is true but status is unexpected
                 this.setAiStatus('ready', 'On-Device AI Ready');
             }
         } else {
-             this.setAiStatus('error', 'On-Device AI Unavailable');
+             this.setAiStatus('error', response?.error || 'On-Device AI Unavailable');
         }
     }
 

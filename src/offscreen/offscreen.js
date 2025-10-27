@@ -288,6 +288,7 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
  */
 async function handleMessage(request, sendResponse) {
   try {
+    console.log('📬 Offscreen received message:', JSON.stringify(request, null, 2));
     const { action } = request;
 
     switch (action) {
