@@ -111,6 +111,8 @@ class BackgroundService {
           language
         });
         
+        console.log('📥 Nano returned:', JSON.stringify(nanoResult));
+        
         if (nanoResult?.success) {
           console.log(`✅ OTP found via GEMINI NANO (confidence: ${nanoResult.confidence})`);
           sendResponse(nanoResult);
@@ -120,7 +122,7 @@ class BackgroundService {
         console.log('⚠️ Nano failed or returned low confidence, moving to Tier 3...');
         
       } catch (error) {
-        console.warn('⚠️ Gemini Nano error:', error.message);
+        console.error('⚠️ Gemini Nano EXCEPTION:', error);
         console.log('Moving to Tier 3 (Cloud API)...');
       }
 
