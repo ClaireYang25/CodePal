@@ -68,6 +68,16 @@ class BackgroundService {
     try {
       const { emailContent, language } = request;
       
+      // Validate content before processing
+      if (!emailContent || emailContent.trim().length < 10) {
+        console.warn('⚠️ Invalid or empty email content, skipping');
+        sendResponse({ 
+          success: false, 
+          error: 'Email content is empty or too short' 
+        });
+        return;
+      }
+      
       // Tier 1: Local regex matching - Fast & Private
       const localResult = await this.otpEngine.extractOTP(emailContent, language);
       

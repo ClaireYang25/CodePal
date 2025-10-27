@@ -187,9 +187,12 @@ class PopupController {
         this.showMessage('Gemini Nano needs to be downloaded first. Creating session will trigger download...', 'info');
       }
 
-      // Create a test session
+      // Create a test session with output language specification
       const session = await globalThis.LanguageModel.create({
-        systemPrompt: 'You are a helpful assistant.',
+        systemPrompt: 'You are a helpful assistant. Always respond in English.',
+        expectedOutputs: [
+          { type: 'text', languages: ['en'] }
+        ],
         monitor(m) {
           m.addEventListener('downloadprogress', (e) => {
             console.log(`Model download: ${Math.round(e.loaded * 100)}%`);

@@ -219,6 +219,12 @@ class GmailMonitor {
    * Extract OTP (via background script)
    */
   async extractOTP(content, language) {
+    // Extra validation to prevent empty content
+    if (!content || content.trim().length < 10) {
+      console.warn('⚠️ Content too short, skipping OTP extraction');
+      return { success: false, error: 'Content too short' };
+    }
+
     return new Promise((resolve) => {
       chrome.runtime.sendMessage({
         action: CONFIG.ACTIONS.EXTRACT_OTP,
