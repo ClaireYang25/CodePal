@@ -73,13 +73,9 @@ export const CONFIG = {
   
   // Action Types for Message Passing
   ACTIONS: {
-    AUTHENTICATE: 'authenticate',
-    GET_LATEST_EMAILS: 'getLatestEmails',
     EXTRACT_OTP: 'extractOTP',
-    CHECK_AUTH_STATUS: 'checkAuthStatus',
     TEST_GEMINI_NANO: 'testGeminiNano',
     TEST_GEMINI_API: 'testGeminiAPI',
-    FILL_OTP: 'fillOTP',
     OFFSCREEN_EXTRACT_OTP: 'offscreen-extractOTP',
     OFFSCREEN_TEST_CONNECTION: 'offscreen-testConnection'
   },

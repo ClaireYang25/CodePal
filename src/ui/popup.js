@@ -171,46 +171,18 @@ class PopupController {
     button.textContent = UI_TEXT.BUTTONS.TESTING;
 
     try {
-      // Test Gemini Nano directly in popup (has window context)
-      if (typeof globalThis.LanguageModel === 'undefined') {
-        throw new Error('LanguageModel API not available. Please enable chrome://flags/#prompt-api-for-gemini-nano');
-      }
-
-      const availability = await globalThis.LanguageModel.availability();
-      console.log('Gemini Nano availability:', availability);
-
-      if (availability === 'no') {
-        throw new Error('Gemini Nano not available on this device');
-      }
-
-      if (availability === 'after-download') {
-        this.showMessage('Gemini Nano needs to be downloaded first. Creating session will trigger download...', 'info');
-      }
-
-      // Create a test session with output language specification
-      const session = await globalThis.LanguageModel.create({
-        systemPrompt: 'You are a helpful assistant. Always respond in English.',
-        expectedOutputs: [
-          { type: 'text', languages: ['en'] }
-        ],
-        monitor(m) {
-          m.addEventListener('downloadprogress', (e) => {
-            console.log(`Model download: ${Math.round(e.loaded * 100)}%`);
-          });
-        }
+      // Test via Service Worker (which uses offscreen document)
+      const response = await this.sendMessage({ 
+        action: CONFIG.ACTIONS.TEST_GEMINI_NANO 
       });
-
-      // Test prompt
-      const result = await session.prompt('Say "Hello" in one word.');
-      console.log('Gemini Nano response:', result);
-
-      // Cleanup
-      session.destroy();
-
-      this.showMessage(`${UI_TEXT.MESSAGES.NANO_SUCCESS} Response: ${result}`, 'success');
+      
+      if (response.success) {
+        this.showMessage(`${UI_TEXT.MESSAGES.NANO_SUCCESS} Response: ${response.response}`, 'success');
+      } else {
+        this.showMessage(`${UI_TEXT.MESSAGES.NANO_ERROR}: ${response.error}`, 'error');
+      }
     } catch (error) {
-      console.error('Gemini Nano test error:', error);
-      this.showMessage(`${UI_TEXT.MESSAGES.NANO_ERROR}: ${error.message}`, 'error');
+      this.showMessage(`${UI_TEXT.MESSAGES.TEST_ERROR}: ${error.message}`, 'error');
     } finally {
       button.classList.remove('loading');
       button.textContent = UI_TEXT.BUTTONS.TEST_NANO;

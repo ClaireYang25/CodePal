@@ -7,7 +7,8 @@
   "permissions": [
     "activeTab",
     "storage",
-    "scripting"
+    "scripting",
+    "offscreen"
   ],
   
   "host_permissions": [
@@ -36,5 +37,11 @@
     "16": "assets/icons/icon16.png",
     "48": "assets/icons/icon48.png",
     "128": "assets/icons/icon128.png"
+  },
+  
+  "offscreen": {
+    "path": "src/offscreen/offscreen.html",
+    "reasons": ["USER_MEDIA"],
+    "justification": "Required for running Gemini Nano (Chrome Prompt API) which needs a window context. Service Workers don't have window objects, so we use an offscreen document as a bridge."
   }
 }
