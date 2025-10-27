@@ -44,29 +44,29 @@
 **步骤**:
 1. 点击浏览器工具栏中的扩展图标
 2. 弹窗应显示:
-   - **Gmail 状态**: Disconnected（未连接）
-   - **AI Service**: Not Configured（未配置）
+   - **Extension Status**: Active（激活）
+   - **AI Service**: Checking...（检查中）
    - **Latest OTP**: None（无）
 
 **预期结果**: 弹窗正常显示，UI清晰美观，无报错
 
 ---
 
-### 测试 2: Gmail 认证
+### 测试 2: Gmail 标签页检查
 
-**目标**: 测试 OAuth 2.0 认证流程
+**目标**: 确认 Content Script 正常运行
 
 **步骤**:
-1. 在弹窗中点击 **"Connect Gmail"** 按钮
-2. 浏览器会打开 Google 登录页面
-3. 选择一个 Google 账号并授权
-4. 授权成功后，弹窗应显示 **"Connected"**
+1. 打开 `mail.google.com`（建议固定该标签页）
+2. 按 F12 打开开发者工具
+3. 切换到 **Console** 标签
+4. 应该看到: `✅ Gmail monitor initialized`
 
 **预期结果**:
-- 认证成功
-- Gmail 状态变为 **"Connected"**
+- Content Script 成功加载
+- 无红色错误信息
 
-**注意**: 如果已登录 Google 账号，可能会自动授权
+**提示**: 如果没有看到初始化消息，刷新 Gmail 页面
 
 ---
 

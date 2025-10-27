@@ -244,8 +244,8 @@
         <!-- Status Card -->
         <div class="status-card">
             <div class="status-item">
-                <span class="status-label">Gmail</span>
-                <span class="status-value" id="gmail-status">Checking...</span>
+                <span class="status-label">Extension Status</span>
+                <span class="status-value connected" id="extension-status">Active</span>
             </div>
             <div class="status-item">
                 <span class="status-label">AI Service</span>
@@ -257,9 +257,15 @@
             </div>
         </div>
 
+        <!-- User Tip -->
+        <div class="privacy-notice" style="margin-bottom: 15px; background: rgba(33, 150, 243, 0.2); border-left: 3px solid #2196F3;">
+            <strong>💡 Quick Tip:</strong><br>
+            Keep your Gmail tab open in the background for automatic OTP detection.<br>
+            <span style="font-size: 11px; opacity: 0.8;">Tip: Right-click tab → "Pin tab"</span>
+        </div>
+
         <!-- Action Buttons -->
-        <button class="button primary" id="connect-gmail">Connect Gmail</button>
-        <button class="button secondary" id="test-chrome-prompt-api">Test Gemini Nano</button>
+        <button class="button secondary" id="test-gemini-nano">Test Gemini Nano</button>
         <button class="button secondary" id="test-gemini-api">Test Gemini API</button>
         <button class="button secondary" id="clear-data">Clear Data</button>
 
@@ -274,12 +280,12 @@
             
             <div class="setting-item">
                 <span class="setting-label">Gemini Nano</span>
-                <div class="toggle" id="chrome-prompt-api-toggle"></div>
+                <div class="toggle active" id="gemini-nano-toggle"></div>
             </div>
             
             <div class="setting-item">
                 <span class="setting-label">Gemini API Fallback</span>
-                <div class="toggle" id="gemini-api-toggle"></div>
+                <div class="toggle" id="gemini-api-fallback-toggle"></div>
             </div>
             
             <div class="setting-item">
@@ -297,17 +303,17 @@
 
         <!-- Privacy Notice -->
         <div class="privacy-notice">
-            <strong>Privacy Protection:</strong><br>
-            • Only uses gmail.readonly permission<br>
-            • Local processing prioritized, AI only for enhancement<br>
-            • No email content storage<br>
-            • Follows minimum permission principle
+            <strong>Privacy First:</strong><br>
+            • No authentication required<br>
+            • Reads only visible Gmail content<br>
+            • Processes locally with Gemini Nano<br>
+            • Cloud API only if configured
         </div>
     </div>
 
     <div class="footer">
         <p>Gmail OTP AutoFill v1.0.0</p>
-        <p>Protecting your privacy, enhancing experience</p>
+        <p>Install and use - no setup needed!</p>
     </div>
 
     <script type="module" src="popup.js"></script>

@@ -1,40 +1,25 @@
 /**
  * Gmail OTP AutoFill - Service Worker
- * Background service handling authentication, message routing, and AI calls
+ * Background service handling message routing and AI calls
  */
 
 import { AIService } from '../services/ai-service.js';
-import { GmailService } from '../services/gmail-service.js';
 import { OTPEngine } from '../core/otp-engine.js';
 import { CONFIG } from '../config/constants.js';
 
 class BackgroundService {
   constructor() {
-    this.gmailService = null;
     this.aiService = new AIService();
     this.otpEngine = new OTPEngine();
-    this.isAuthenticated = false;
     this.init();
   }
 
   async init() {
     try {
-      await this.checkAuthentication();
       this.setupMessageListeners();
       console.log('✅ Background service initialized');
     } catch (error) {
       console.error('❌ Background initialization failed:', error);
-    }
-  }
-
-  /**
-   * Check Gmail authentication status
-   */
-  async checkAuthentication() {
-    const token = await this.getStoredToken();
-    if (token) {
-      this.isAuthenticated = true;
-      this.gmailService = new GmailService(token);
     }
   }
 
@@ -54,10 +39,7 @@ class BackgroundService {
   async handleMessage(request, sender, sendResponse) {
     try {
       const handlers = {
-        [CONFIG.ACTIONS.AUTHENTICATE]: () => this.handleAuthentication(sendResponse),
-        [CONFIG.ACTIONS.GET_LATEST_EMAILS]: () => this.handleGetLatestEmails(request, sendResponse),
         [CONFIG.ACTIONS.EXTRACT_OTP]: () => this.handleExtractOTP(request, sendResponse),
-        [CONFIG.ACTIONS.CHECK_AUTH_STATUS]: () => sendResponse({ authenticated: this.isAuthenticated }),
         [CONFIG.ACTIONS.TEST_GEMINI_NANO]: () => this.handleTestGeminiNano(sendResponse),
         [CONFIG.ACTIONS.TEST_GEMINI_API]: () => this.handleTestGeminiAPI(sendResponse)
       };
@@ -75,74 +57,26 @@ class BackgroundService {
   }
 
   /**
-   * Handle Gmail authentication
-   */
-  async handleAuthentication(sendResponse) {
-    try {
-      const token = await this.authenticateWithGoogle();
-      await this.storeToken(token);
-      this.isAuthenticated = true;
-      this.gmailService = new GmailService(token);
-      sendResponse({ success: true, token });
-    } catch (error) {
-      console.error('Authentication failed:', error);
-      sendResponse({ error: error.message });
-    }
-  }
-
-  /**
-   * Google OAuth authentication
-   */
-  async authenticateWithGoogle() {
-    return new Promise((resolve, reject) => {
-      chrome.identity.getAuthToken({ interactive: true }, (token) => {
-        if (chrome.runtime.lastError) {
-          reject(new Error(chrome.runtime.lastError.message));
-        } else if (token) {
-          resolve(token);
-        } else {
-          reject(new Error('No token received'));
-        }
-      });
-    });
-  }
-
-  /**
-   * Get latest emails
-   */
-  async handleGetLatestEmails(request, sendResponse) {
-    if (!this.isAuthenticated) {
-      sendResponse({ error: 'Not authenticated' });
-      return;
-    }
-
-    try {
-      const limit = request.limit || CONFIG.API.GMAIL.DEFAULT_LIMIT;
-      const emails = await this.gmailService.getLatestEmails(limit);
-      sendResponse({ success: true, emails });
-    } catch (error) {
-      sendResponse({ error: error.message });
-    }
-  }
-
-  /**
    * Extract OTP using three-tier intelligent engine:
-   * 1️⃣ Local regex matching
-   * 2️⃣ Gemini Nano (Chrome Prompt API)
+   * 1️⃣ Local regex matching (< 50ms, 90%+ coverage)
+   * 2️⃣ Gemini Nano (Chrome Prompt API, on-device)
    * 3️⃣ Gemini API (cloud fallback)
    */
   async handleExtractOTP(request, sendResponse) {
     try {
       const { emailContent, language } = request;
       
-      // Tier 1: Local regex matching
+      // Tier 1: Local regex matching - Fast & Private
       const localResult = await this.otpEngine.extractOTP(emailContent, language);
       
-      if (localResult.success && localResult.confidence > CONFIG.OTP.CONFIDENCE_THRESHOLD) {
-        console.log('✅ OTP found via local regex');
+      // Lowered confidence threshold for aggressive local-first strategy
+      if (localResult.success && localResult.confidence > 0.6) {
+        console.log(`✅ OTP found via local regex (confidence: ${localResult.confidence})`);
         sendResponse(localResult);
         return;
       }
+
+      console.log(`⚠️ Local regex confidence low (${localResult.confidence}), trying Gemini Nano...`);
 
       // Tier 2: Gemini Nano (via offscreen document)
       try {
@@ -162,9 +96,18 @@ class BackgroundService {
       }
 
       // Tier 3: Gemini API (cloud fallback)
-      const apiResult = await this.aiService.extractOTP(emailContent, language);
-      console.log('✅ OTP found via Gemini API');
-      sendResponse(apiResult);
+      try {
+        const apiResult = await this.aiService.extractOTP(emailContent, language);
+        console.log('✅ OTP found via Gemini API');
+        sendResponse(apiResult);
+      } catch (error) {
+        console.error('❌ All OTP extraction methods failed');
+        sendResponse({ 
+          success: false, 
+          error: 'Failed to extract OTP. Please try manually.',
+          details: error.message
+        });
+      }
       
     } catch (error) {
       console.error('❌ OTP extraction failed:', error);
@@ -221,25 +164,6 @@ class BackgroundService {
       console.error('Offscreen document error:', error);
       throw error;
     }
-  }
-
-  /**
-   * Store and retrieve authentication token
-   */
-  async storeToken(token) {
-    return new Promise((resolve) => {
-      chrome.storage.local.set({ 
-        [CONFIG.STORAGE_KEYS.GMAIL_TOKEN]: token 
-      }, resolve);
-    });
-  }
-
-  async getStoredToken() {
-    return new Promise((resolve) => {
-      chrome.storage.local.get([CONFIG.STORAGE_KEYS.GMAIL_TOKEN], (result) => {
-        resolve(result[CONFIG.STORAGE_KEYS.GMAIL_TOKEN]);
-      });
-    });
   }
 }
 

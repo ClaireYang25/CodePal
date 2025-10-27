@@ -8,23 +8,19 @@ import { CONFIG } from '../config/constants.js';
 // UI Text Constants
 const UI_TEXT = {
   STATUS: {
-    CONNECTED: 'Connected',
-    DISCONNECTED: 'Disconnected',
+    ACTIVE: 'Active',
+    INACTIVE: 'Inactive',
     CONFIGURED: 'Configured',
     NOT_CONFIGURED: 'Not Configured',
     NONE: 'None',
     CHECKING: 'Checking...'
   },
   BUTTONS: {
-    CONNECT_GMAIL: 'Connect Gmail',
-    CONNECTING: 'Connecting...',
     TEST_NANO: 'Test Gemini Nano',
     TESTING: 'Testing...',
     TEST_API: 'Test Gemini API'
   },
   MESSAGES: {
-    GMAIL_SUCCESS: 'Gmail connected successfully!',
-    GMAIL_ERROR: 'Connection failed',
     NANO_SUCCESS: 'Gemini Nano test successful!',
     NANO_ERROR: 'Gemini Nano test failed',
     API_SUCCESS: 'Gemini API test successful!',
@@ -43,8 +39,8 @@ class PopupController {
   constructor() {
     this.settings = {
       autoFill: true,
-      chromePromptAPI: true,
-      geminiAPI: true,
+      geminiNano: true,
+      geminiAPIFallback: false,
       notifications: true
     };
     this.init();
@@ -82,8 +78,8 @@ class PopupController {
 
   async updateStatus() {
     try {
-      const gmailStatus = await this.checkGmailStatus();
-      this.updateStatusElement('gmail-status', gmailStatus.text, gmailStatus.class);
+      // Extension status is always active
+      this.updateStatusElement('extension-status', UI_TEXT.STATUS.ACTIVE, 'connected');
 
       const aiStatus = await this.checkAIStatus();
       this.updateStatusElement('ai-status', aiStatus.text, aiStatus.class);
@@ -93,18 +89,6 @@ class PopupController {
     } catch (error) {
       console.error('Failed to update status:', error);
     }
-  }
-
-  async checkGmailStatus() {
-    return new Promise((resolve) => {
-      chrome.runtime.sendMessage({ action: CONFIG.ACTIONS.CHECK_AUTH_STATUS }, (response) => {
-        if (response && response.authenticated) {
-          resolve({ text: UI_TEXT.STATUS.CONNECTED, class: 'connected' });
-        } else {
-          resolve({ text: UI_TEXT.STATUS.DISCONNECTED, class: 'disconnected' });
-        }
-      });
-    });
   }
 
   async checkAIStatus() {
@@ -148,11 +132,7 @@ class PopupController {
   }
 
   setupEventListeners() {
-    document.getElementById('connect-gmail')?.addEventListener('click', () => {
-      this.connectGmail();
-    });
-
-    document.getElementById('test-chrome-prompt-api')?.addEventListener('click', () => {
+    document.getElementById('test-gemini-nano')?.addEventListener('click', () => {
       this.testGeminiNano();
     });
 
@@ -172,12 +152,12 @@ class PopupController {
       this.toggleSetting('autoFill');
     });
 
-    document.getElementById('chrome-prompt-api-toggle')?.addEventListener('click', () => {
-      this.toggleSetting('chromePromptAPI');
+    document.getElementById('gemini-nano-toggle')?.addEventListener('click', () => {
+      this.toggleSetting('geminiNano');
     });
 
-    document.getElementById('gemini-api-toggle')?.addEventListener('click', () => {
-      this.toggleSetting('geminiAPI');
+    document.getElementById('gemini-api-fallback-toggle')?.addEventListener('click', () => {
+      this.toggleSetting('geminiAPIFallback');
     });
 
     document.getElementById('notification-toggle')?.addEventListener('click', () => {
@@ -185,30 +165,8 @@ class PopupController {
     });
   }
 
-  async connectGmail() {
-    const button = document.getElementById('connect-gmail');
-    button.classList.add('loading');
-    button.textContent = UI_TEXT.BUTTONS.CONNECTING;
-
-    try {
-      const response = await this.sendMessage({ action: CONFIG.ACTIONS.AUTHENTICATE });
-      
-      if (response.success) {
-        this.showMessage(UI_TEXT.MESSAGES.GMAIL_SUCCESS, 'success');
-        await this.updateStatus();
-      } else {
-        this.showMessage(`${UI_TEXT.MESSAGES.GMAIL_ERROR}: ${response.error}`, 'error');
-      }
-    } catch (error) {
-      this.showMessage(`${UI_TEXT.MESSAGES.GMAIL_ERROR}: ${error.message}`, 'error');
-    } finally {
-      button.classList.remove('loading');
-      button.textContent = UI_TEXT.BUTTONS.CONNECT_GMAIL;
-    }
-  }
-
   async testGeminiNano() {
-    const button = document.getElementById('test-chrome-prompt-api');
+    const button = document.getElementById('test-gemini-nano');
     button.classList.add('loading');
     button.textContent = UI_TEXT.BUTTONS.TESTING;
 
@@ -289,8 +247,8 @@ class PopupController {
 
   updateUI() {
     document.getElementById('auto-fill-toggle')?.classList.toggle('active', this.settings.autoFill);
-    document.getElementById('chrome-prompt-api-toggle')?.classList.toggle('active', this.settings.chromePromptAPI);
-    document.getElementById('gemini-api-toggle')?.classList.toggle('active', this.settings.geminiAPI);
+    document.getElementById('gemini-nano-toggle')?.classList.toggle('active', this.settings.geminiNano);
+    document.getElementById('gemini-api-fallback-toggle')?.classList.toggle('active', this.settings.geminiAPIFallback);
     document.getElementById('notification-toggle')?.classList.toggle('active', this.settings.notifications);
   }
 
@@ -313,6 +271,14 @@ class PopupController {
     const message = document.createElement('div');
     message.className = type;
     message.textContent = text;
+    message.style.cssText = `
+      padding: 10px 15px;
+      margin-bottom: 15px;
+      border-radius: 8px;
+      font-size: 13px;
+      background: ${type === 'success' ? 'rgba(76, 175, 80, 0.3)' : 'rgba(244, 67, 54, 0.3)'};
+      border: 1px solid ${type === 'success' ? 'rgba(76, 175, 80, 0.5)' : 'rgba(244, 67, 54, 0.5)'};
+    `;
     
     const content = document.querySelector('.content');
     content.insertBefore(message, content.firstChild);
