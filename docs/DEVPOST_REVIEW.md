@@ -1,272 +1,75 @@
-# Gmail OTP AutoFill - Devpost 评审要点
+# Gmail OTP AutoFill - Hackathon Judging Guide
 
-## 🏆 技术创新亮点
-
-### 1. 混合智能识别系统
-**核心创新**：结合本地规则匹配和 AI 语义理解的混合识别架构
-
-**技术细节**：
-- **本地规则优先**：使用精心设计的多语言正则规则进行快速匹配（< 100ms）
-- **AI 增强**：仅在本地匹配置信度 < 0.8 时调用 Gemini Nano API
-- **智能切换**：根据邮件复杂度、语言和上下文自动选择最佳识别策略
-- **置信度评估**：为每个识别结果提供 0-1 的置信度评分
-
-**创新价值**：
-- 平衡了识别速度和准确性
-- 减少了 API 调用成本（减少 70% 的 API 请求）
-- 提供了可解释的识别结果
-
-### 2. 多语言智能识别引擎
-**核心创新**：支持中文、英文、西班牙语、意大利语等多种语言的验证码识别
-
-**技术实现**：
-```javascript
-// 多语言规则示例
-const rules = {
-  zh: {
-    patterns: [/验证码[：:]\s*(\d{4,8})/i, /您的验证码[：:]\s*(\d{4,8})/i],
-    keywords: ['验证码', '验证', '代码'],
-    contexts: ['登录', '注册', '安全验证']
-  },
-  en: {
-    patterns: [/verification code[：:]\s*(\d{4,8})/i, /your code[：:]\s*(\d{4,8})/i],
-    keywords: ['verification', 'code', 'otp', 'pin'],
-    contexts: ['login', 'signup', 'security']
-  }
-  // ... 更多语言
-};
-```
-
-**创新价值**：
-- 解决了国际化应用的验证码识别问题
-- 针对不同语言的表达习惯优化识别规则
-- 支持语言自动检测和手动指定
-
-### 3. 复杂邮件处理能力
-**核心创新**：能够处理 HTML 格式、嵌套内容、多封邮件等复杂场景
-
-**技术特性**：
-- **HTML 解析**：智能提取 HTML 邮件中的文本内容
-- **结构化内容**：识别表格、列表等结构化内容中的验证码
-- **多邮件场景**：处理包含多个验证码的复杂邮件
-- **上下文分析**：结合邮件主题、发件人等信息进行智能判断
-
-**创新价值**：
-- 提高了对复杂邮件格式的适应性
-- 减少了误识别和漏识别
-- 增强了系统的鲁棒性
-
-## 🔒 隐私合规亮点
-
-### 1. 最小权限原则
-**合规设计**：严格遵循最小权限原则，仅申请必要的权限
-
-**权限分析**：
-- **Gmail 权限**：仅使用 `gmail.readonly` 权限，不读取邮件内容
-- **存储权限**：仅用于存储 OTP 和设置，不存储邮件内容
-- **脚本权限**：仅用于在 Gmail 页面注入内容脚本
-- **身份权限**：仅用于 OAuth 认证，不访问其他 Google 服务
-
-**合规价值**：
-- 符合 GDPR、CCPA 等隐私法规要求
-- 用户可清楚了解权限使用情况
-- 降低了隐私泄露风险
-
-### 2. 数据最小化
-**数据策略**：实施严格的数据最小化原则
-
-**技术实现**：
-```javascript
-// 数据匿名化示例
-anonymizeEmailContent(content) {
-  return content
-    .replace(/[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}/g, '[EMAIL]')
-    .replace(/\b\d{3}[-.]?\d{3}[-.]?\d{4}\b/g, '[PHONE]')
-    .substring(0, 200); // 仅保留前200个字符
-}
-```
-
-**数据保护**：
-- **本地优先**：优先使用本地规则，减少 API 调用
-- **数据匿名化**：移除邮件中的敏感信息（邮箱、电话等）
-- **自动清理**：定期清理过期数据（7天自动删除）
-- **加密存储**：敏感数据加密存储
-
-**合规价值**：
-- 符合数据最小化原则
-- 保护用户隐私信息
-- 减少数据泄露风险
-
-### 3. 透明度和用户控制
-**用户控制**：提供完整的用户控制和透明度
-
-**功能特性**：
-- **设置控制**：用户可自定义各种功能开关
-- **数据控制**：用户可随时清除存储的数据
-- **权限管理**：用户可查看和管理权限使用情况
-- **操作日志**：所有操作都有清晰的日志记录
-
-**合规价值**：
-- 符合用户权利保护要求
-- 提供了完整的透明度
-- 增强了用户信任度
-
-## 🎯 用户体验亮点
-
-### 1. 智能自动填充
-**核心功能**：智能识别验证码输入框并自动填充
-
-**技术实现**：
-```javascript
-// 输入框识别示例
-isOTPInputField(element) {
-  const otpKeywords = ['otp', 'verification', 'code', 'token', 'pin', '验证码'];
-  const fieldAttributes = [
-    element.name?.toLowerCase(),
-    element.id?.toLowerCase(),
-    element.placeholder?.toLowerCase()
-  ];
-  return otpKeywords.some(keyword => 
-    fieldAttributes.some(attr => attr.includes(keyword))
-  );
-}
-```
-
-**用户体验**：
-- **自动识别**：智能识别验证码输入框
-- **跨标签页**：支持在不同标签页间自动填充
-- **实时反馈**：提供清晰的操作反馈和状态提示
-- **智能匹配**：高精度识别，减少误识别
-
-### 2. 高精度识别系统
-**识别能力**：提供高精度的验证码识别
-
-**性能指标**：
-- **本地规则**：准确率 > 85%，识别速度 < 100ms
-- **AI 增强**：准确率 > 95%，识别速度 < 2s
-- **混合系统**：综合准确率 > 90%，平均识别速度 < 500ms
-
-**技术特性**：
-- **置信度评估**：为每个识别结果提供置信度评分
-- **误识别防护**：多重验证机制减少误识别
-- **上下文分析**：结合邮件上下文提高识别准确性
-
-### 3. 用户界面设计
-**界面特性**：现代化、直观的用户界面
-
-**设计亮点**：
-- **渐变背景**：使用现代渐变设计
-- **毛玻璃效果**：backdrop-filter 实现毛玻璃效果
-- **响应式设计**：适配不同屏幕尺寸
-- **状态指示**：清晰的状态指示和反馈
-
-## 📊 技术指标和性能
-
-### 性能指标
-- **内存使用**：< 10MB
-- **CPU 占用**：< 1%
-- **识别速度**：本地规则 < 100ms，AI 增强 < 2s
-- **准确率**：本地规则 > 85%，AI 增强 > 95%
-
-### 隐私指标
-- **数据保留**：OTP 数据仅保留 7 天
-- **API 调用**：仅在必要时调用，减少 70% 的 API 请求
-- **权限范围**：仅使用必要的 Gmail 只读权限
-- **数据匿名化**：100% 的敏感信息匿名化
-
-### 用户体验指标
-- **安装时间**：< 30 秒
-- **配置时间**：< 2 分钟
-- **识别成功率**：> 90%
-- **用户满意度**：预期 > 4.5/5
-
-## 🚀 市场价值和社会影响
-
-### 1. 解决实际问题
-**问题识别**：
-- 用户需要手动复制粘贴验证码，操作繁琐
-- 多语言验证码识别困难
-- 复杂邮件格式难以处理
-- 隐私安全问题
-
-**解决方案**：
-- 自动化验证码填充，提升用户体验
-- 多语言智能识别，支持国际化应用
-- 复杂邮件处理，提高识别准确性
-- 隐私保护设计，确保用户安全
-
-### 2. 技术创新价值
-**技术贡献**：
-- 混合智能识别架构
-- 多语言验证码识别算法
-- 隐私保护的 AI 应用
-- 最小权限的扩展设计
-
-**行业影响**：
-- 推动了验证码自动填充技术的发展
-- 提供了隐私保护的 AI 应用范例
-- 促进了多语言智能识别的研究
-
-### 3. 商业价值
-**市场机会**：
-- 庞大的 Gmail 用户群体
-- 不断增长的验证码使用场景
-- 隐私保护需求的提升
-- AI 技术的普及应用
-
-**商业模式**：
-- 免费版本：基础功能
-- 高级版本：AI 增强功能
-- 企业版本：定制化服务
-
-## 🏅 评审要点总结
-
-### 技术创新（40%）
-- ✅ 混合智能识别系统
-- ✅ 多语言支持
-- ✅ 复杂邮件处理
-- ✅ Gemini Nano 集成
-
-### 隐私合规（30%）
-- ✅ 最小权限原则
-- ✅ 数据最小化
-- ✅ 透明度和用户控制
-- ✅ 安全设计
-
-### 用户体验（20%）
-- ✅ 智能自动填充
-- ✅ 高精度识别
-- ✅ 现代化界面
-- ✅ 实时反馈
-
-### 社会影响（10%）
-- ✅ 解决实际问题
-- ✅ 技术创新价值
-- ✅ 市场价值
-- ✅ 行业影响
-
-## 📝 评审建议
-
-### 1. 突出技术创新
-- 强调混合智能识别架构的创新性
-- 展示多语言识别的技术难度
-- 说明复杂邮件处理的技术价值
-
-### 2. 强调隐私保护
-- 详细说明最小权限原则的实施
-- 展示数据最小化的技术实现
-- 强调用户控制和透明度
-
-### 3. 展示用户体验
-- 提供实际使用场景的演示
-- 展示自动填充的便利性
-- 说明高精度识别的价值
-
-### 4. 证明社会价值
-- 说明解决的实际问题
-- 展示技术创新的价值
-- 证明市场需求的真实性
+This document maps our project's features directly to the **Google Chrome Built-in AI Challenge 2025** judging criteria.
 
 ---
 
-**总结**：Gmail OTP AutoFill 是一个技术创新、隐私合规、用户体验优秀的 Chrome 扩展项目，具有很高的评审价值和市场潜力。
+### ✅ **Judging Criterion 1: Purpose**
+> "Does your project meaningfully improve a common user journey or task? Does your project unlock a new capability, previously impractical on the web?"
+
+**Our Answer: Yes, profoundly.**
+
+1.  **Improves a Universal User Journey**: We are fixing the broken, multi-step process of retrieving verification codes from Gmail. This is a task performed by millions of users daily. We transform a frustrating 30-second workflow into a seamless, zero-second auto-fill.
+2.  **Unlocks a New Capability**: We are making the desktop web experience as fluid as mobile. The "proactive AI pattern" of anticipating a user's need for an OTP and having it ready is a new capability for web extensions. Furthermore, our plan to use the **Prompt API's multimodal support** to read **image-based OTPs** from emails is a capability that was previously impractical without powerful, built-in, on-device AI.
+
+---
+
+### ✅ **Judging Criterion 2: Technological Execution**
+> "How well are you showcasing 1 or more of the APIs powered by AI models built into Google Chrome?"
+
+**Our Answer: Our project is a textbook showcase of the Prompt API and the hybrid AI strategy.**
+
+1.  **Core Use of the Prompt API**: The heart of our intelligent extraction lies in using `globalThis.LanguageModel` (the Prompt API) to run Gemini Nano. We use it to analyze email content semantically, going far beyond what simple regex can achieve. This happens securely, on-device, via an `Offscreen Document`.
+2.  **Sophisticated Hybrid AI Architecture**: We've implemented the exact hybrid model encouraged by the hackathon.
+    *   **Tier 1 (Local Regex)**: For speed and efficiency.
+    *   **Tier 2 (Gemini Nano)**: Our primary AI engine for complex cases, showcasing the "Built-in AI" theme. This highlights **privacy** and **offline resilience**.
+    *   **Tier 3 (Gemini API)**: A graceful fallback for users on unsupported hardware, demonstrating a robust, **network-resilient UX** strategy.
+3.  **Ready for Multimodality**: Our architecture is built to seamlessly integrate image processing via the Prompt API as soon as it's fully enabled, showing forward-thinking technological design.
+
+---
+
+### ✅ **Judging Criterion 3: User Experience (UX)**
+> "How well executed is the application? Is it easy to use and understand?"
+
+**Our Answer: The entire goal of our project is to create a frictionless, "invisible" user experience.**
+
+1.  **"It Just Works" Philosophy**: The ideal interaction is no interaction. The extension works automatically in the background. The user simply focuses an OTP input field, and the code is already there.
+2.  **Minimalism and Clarity**:
+    *   The on-page notification is clean, informative, and disappears automatically.
+    *   The popup UI is intuitive, providing clear status indicators and simple toggles for settings.
+3.  **Seamless Integration**: It feels like a native browser feature, not a clunky add-on. We are delivering the "seamless mobile-like experience" we promise.
+
+---
+
+### ✅ **Judging Criterion 4: Content**
+> "How creative is the application? What’s the visual quality like?"
+
+**Our Answer: Our creativity lies in applying cutting-edge AI to a universal, yet overlooked, problem.**
+
+1.  **Creative Application of AI**: Instead of building another chatbot, we've given the browser a "brain boost" by enabling it to understand and act upon the content of a user's emails proactively and privately. This is a creative, practical, and powerful use of on-device AI.
+2.  **Visual Quality**:
+    *   The popup UI is modern and clean, using gradients and blur effects for a polished look.
+    *   The on-page notifications are designed to be helpful but unobtrusive, matching a modern aesthetic.
+
+---
+
+### ✅ **Judging Criterion 5: Functionality**
+> "How scalable is the application? How well are the APIs used within the project? Can it be used by more than one type of audience?"
+
+**Our Answer: The application is built for scalability and a global audience.**
+
+1.  **Scalability**:
+    *   **Technical**: The modular architecture (`core/`, `services/`, etc.) makes it easy to add support for new email providers (like Outlook) or new AI models without rewriting the core logic.
+    *   **Performance**: By prioritizing local regex and on-device AI, the solution scales to millions of users without incurring server costs, a key benefit highlighted in the hackathon brief.
+2.  **API Usage**: We use the APIs exactly as intended: the Prompt API for on-device intelligence and privacy, and the Gemini API for reach and resilience.
+3.  **Global Audience**:
+    *   **Gmail is Global**: Our choice of platform serves over 1.8 billion users.
+    *   **Multi-language Support**: Our OTP engine is designed with multi-language rules from the ground up, making it functional for users in different regions.
+
+---
+
+### 🏆 **Positioning for Awards**
+
+*   **Most Helpful - Chrome Extension**: Our project directly targets and solves a daily frustration for a massive user base. Its helpfulness is immediate and obvious.
+*   **Best Multimodal AI Application**: We will clearly articulate and (if possible within the timeline) demonstrate the capability to read OTPs from images within emails, showcasing a powerful, non-textual use of the Prompt API.
+*   **Best Hybrid AI Application**: Our three-tier engine is a perfect example of a hybrid strategy, using the best tool for each scenario (local, on-device, cloud) to maximize performance, privacy, and availability.
