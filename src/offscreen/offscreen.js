@@ -245,8 +245,13 @@ async function forceInitializeNano() {
     console.log('✅ Nano session created successfully');
     isInitialized = true;
     
-    // Return appropriate status based on whether download happened
-    if (downloadStarted) {
+    // Check current availability again to determine if we're downloading or ready
+    const currentAvailability = await globalThis.LanguageModel.availability();
+    const currentStatus = String(currentAvailability).toLowerCase();
+    
+    console.log('📊 Post-create availability:', currentAvailability);
+    
+    if (currentStatus === 'downloading') {
       return { success: true, status: 'downloading', message: 'Model download in progress' };
     } else {
       return { success: true, status: 'ready', message: 'Session ready' };
