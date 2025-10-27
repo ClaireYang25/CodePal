@@ -41,7 +41,7 @@ async function initializeNano() {
     nanoSession = await globalThis.LanguageModel.create({
       systemPrompt: 'You are a verification code extraction assistant. Always respond in English with valid JSON format.',
       expectedOutputs: [
-        { language: 'en' }  // Correct syntax: just { language: 'code' }
+        { type: 'text', language: 'en' }  // Must have BOTH type and language
       ],
       monitor(m) {
         m.addEventListener('downloadprogress', (e) => {

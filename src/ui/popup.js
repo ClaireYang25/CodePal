@@ -57,7 +57,7 @@ class PopupController {
     async loadSettings() {
         const keysToGet = [
             CONFIG.STORAGE_KEYS.POPUP_SETTINGS,
-            CONFIG.STORAGE_KEYS.API_KEY,
+            CONFIG.STORAGE_KEYS.GEMINI_API_KEY,
             CONFIG.STORAGE_KEYS.LATEST_OTP
         ];
         const result = await chrome.storage.local.get(keysToGet);
@@ -65,7 +65,7 @@ class PopupController {
         if (result[CONFIG.STORAGE_KEYS.POPUP_SETTINGS]) {
             this.settings = { ...this.settings, ...result[CONFIG.STORAGE_KEYS.POPUP_SETTINGS] };
         }
-        if (result[CONFIG.STORAGE_KEYS.API_KEY]) {
+        if (result[CONFIG.STORAGE_KEYS.GEMINI_API_KEY]) {
             this.elements.apiKeyInput.value = "••••••••••••••••";
         }
         this.updateLatestOtpDisplay(result[CONFIG.STORAGE_KEYS.LATEST_OTP]);
@@ -178,7 +178,7 @@ class PopupController {
     async saveApiKey() {
         const apiKey = this.elements.apiKeyInput.value;
         if (apiKey && apiKey !== "••••••••••••••••") {
-            await chrome.storage.local.set({ [CONFIG.STORAGE_KEYS.API_KEY]: apiKey });
+            await chrome.storage.local.set({ [CONFIG.STORAGE_KEYS.GEMINI_API_KEY]: apiKey });
             this.elements.apiKeyInput.value = "••••••••••••••••";
             // You might want to add a success message here
         }
@@ -188,7 +188,7 @@ class PopupController {
         if (confirm("Are you sure you want to clear the cached OTP and API key?")) {
             await chrome.storage.local.remove([
                 CONFIG.STORAGE_KEYS.LATEST_OTP,
-                CONFIG.STORAGE_KEYS.API_KEY
+                CONFIG.STORAGE_KEYS.GEMINI_API_KEY
             ]);
             this.elements.apiKeyInput.value = "";
             this.updateLatestOtpDisplay();
