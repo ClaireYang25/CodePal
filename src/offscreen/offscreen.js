@@ -11,6 +11,7 @@ let isInitialized = false;
 
 /**
  * Initialize Gemini Nano session
+ * Based on successful implementation pattern from FeedMeJD
  */
 async function initializeNano() {
   try {
@@ -24,38 +25,39 @@ async function initializeNano() {
     // Check availability
     const availability = await globalThis.LanguageModel.availability();
     console.log('📊 Gemini Nano availability:', availability);
-    console.log('📊 Availability type:', typeof availability);
+    
+    const availabilityLower = String(availability).toLowerCase();
 
-    if (availability === 'no') {
+    // Handle 'no' or 'unavailable' status
+    if (availabilityLower === 'no' || availabilityLower === 'unavailable') {
       const errorMsg = 'Gemini Nano not available on this device. Check hardware requirements.';
       console.error(`❌ ${errorMsg}`);
       return { success: false, error: errorMsg, status: 'unavailable' };
     }
 
-    // Handle different availability states
-    if (availability === 'after-download' || availability === 'downloadable') {
+    // Handle 'downloadable' or 'after-download' status
+    if (availabilityLower === 'after-download' || availabilityLower === 'downloadable') {
       console.log('⏬ Gemini Nano model needs to be downloaded (user gesture required)');
       // Don't create session yet. Return downloadable status for UI to handle.
       return { success: true, message: 'Model ready to download', status: 'downloadable' };
     }
 
-    if (availability === 'downloading') {
+    // Handle 'downloading' status
+    if (availabilityLower === 'downloading') {
       console.log('⏬ Gemini Nano model is currently downloading...');
       return { success: true, message: 'Model is downloading', status: 'downloading' };
     }
 
-    // Only create session if model is readily available
-    if (availability !== 'readily') {
+    // Handle 'readily' or 'available' status - model is ready to use
+    if (availabilityLower !== 'readily' && availabilityLower !== 'available') {
       console.warn('⚠️ Unexpected availability state:', availability);
       return { success: false, error: `Unexpected availability: ${availability}`, status: 'unavailable' };
     }
 
-    // Create session with proper output language configuration
+    // Create session - based on FeedMeJD's working implementation
+    console.log('📝 Creating Nano session...');
     nanoSession = await globalThis.LanguageModel.create({
       systemPrompt: 'You are a verification code extraction assistant. Always respond in English with valid JSON format.',
-      expectedOutputs: [
-        { type: 'text', language: 'en' }  // Must have BOTH type and language
-      ],
       monitor(m) {
         m.addEventListener('downloadprogress', (e) => {
           console.log(`⏬ Nano model download: ${Math.round(e.loaded * 100)}%`);
@@ -166,45 +168,41 @@ function parseNanoResponse(response) {
 
 /**
  * Test Gemini Nano connection
+ * Returns the current status without forcing initialization
  */
 async function testNanoConnection() {
   try {
-    if (!isInitialized) {
-      const initResult = await initializeNano();
-      if (!initResult.success) {
-        // For a test, this is not a hard error, but a state to report
-        return { success: true, message: initResult.error, status: initResult.status };
-      }
-    }
-
-    if (!nanoSession) {
-      // This case should ideally not be reached if init was successful
+    // If already initialized and working, test it
+    if (isInitialized && nanoSession) {
+      const testResult = await nanoSession.prompt('Say "Hello" in one word.');
       return {
-        success: false,
-        error: 'Session not created'
+        success: true,
+        status: 'ready',
+        message: 'Gemini Nano is working',
+        response: testResult
       };
     }
 
-    // Simple test prompt
-    const testResult = await nanoSession.prompt('Say "Hello" in one word.');
+    // Not initialized yet, check availability
+    const initResult = await initializeNano();
     
-    return {
-      success: true,
-      message: 'Gemini Nano is working',
-      response: testResult
-    };
+    // Return the init result directly - it contains the correct status
+    // This could be 'downloadable', 'downloading', 'ready', or 'unavailable'
+    return initResult;
 
   } catch (error) {
     console.error('❌ Nano test failed:', error);
     return {
       success: false,
-      error: error.message
+      error: error.message,
+      status: 'error'
     };
   }
 }
 
 /**
  * Force initialize Nano (when user explicitly triggers download)
+ * Based on FeedMeJD's successful pattern
  */
 async function forceInitializeNano() {
   try {
@@ -216,25 +214,43 @@ async function forceInitializeNano() {
 
     const availability = await globalThis.LanguageModel.availability();
     console.log('📊 Current availability:', availability);
+    
+    const availabilityLower = String(availability).toLowerCase();
 
-    // For force download, we proceed even if it's 'downloadable' or 'downloading'
+    // Check if device supports Nano at all
+    if (availabilityLower === 'no' || availabilityLower === 'unavailable') {
+      return { success: false, error: 'Device does not support Gemini Nano', status: 'unavailable' };
+    }
+
+    // For force download, we proceed to create() even if 'downloadable' or 'downloading'
+    // The user gesture from the button click allows this
+    console.log('📝 Creating session (will trigger download if needed)...');
+    
+    let downloadStarted = false;
+    
     nanoSession = await globalThis.LanguageModel.create({
       systemPrompt: 'You are a verification code extraction assistant. Always respond in English with valid JSON format.',
-      expectedOutputs: [
-        { type: 'text', language: 'en' }
-      ],
       monitor(m) {
         m.addEventListener('downloadprogress', (e) => {
+          if (!downloadStarted) {
+            console.log('⏬ Model download started!');
+            downloadStarted = true;
+          }
           const progress = Math.round(e.loaded * 100);
           console.log(`⏬ Download progress: ${progress}%`);
-          // Could send progress updates to UI here
         });
       },
     });
 
-    console.log('✅ Nano session created (download started or completed)');
+    console.log('✅ Nano session created successfully');
     isInitialized = true;
-    return { success: true, status: 'ready', message: 'Download initiated' };
+    
+    // Return appropriate status based on whether download happened
+    if (downloadStarted) {
+      return { success: true, status: 'downloading', message: 'Model download in progress' };
+    } else {
+      return { success: true, status: 'ready', message: 'Session ready' };
+    }
 
   } catch (error) {
     console.error('❌ Force init failed:', error);
