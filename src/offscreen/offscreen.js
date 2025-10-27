@@ -24,6 +24,7 @@ async function initializeNano() {
     // Check availability
     const availability = await globalThis.LanguageModel.availability();
     console.log('📊 Gemini Nano availability:', availability);
+    console.log('📊 Availability type:', typeof availability);
 
     if (availability === 'no') {
       const errorMsg = 'Gemini Nano not available on this device. Check hardware requirements.';

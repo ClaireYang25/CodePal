@@ -224,7 +224,13 @@ class BackgroundService {
         action: CONFIG.ACTIONS.OFFSCREEN_TEST_CONNECTION
       });
 
-      console.log('🧪 Nano test result:', result);
+      console.log('🧪 Nano test result:', JSON.stringify(result, null, 2));
+      console.log('🧪 Result breakdown:', {
+        success: result.success,
+        status: result.status,
+        message: result.message,
+        error: result.error
+      });
       sendResponse(result);
       
     } catch (error) {
