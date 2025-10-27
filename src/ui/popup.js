@@ -55,10 +55,12 @@ class PopupController {
     }
 
     async loadSettings() {
-        const result = await chrome.storage.local.get([
+        const keysToGet = [
             CONFIG.STORAGE_KEYS.POPUP_SETTINGS,
-            CONFIG.STORAGE_KEYS.API_KEY
-        ]);
+            CONFIG.STORAGE_KEYS.API_KEY,
+            CONFIG.STORAGE_KEYS.LATEST_OTP
+        ];
+        const result = await chrome.storage.local.get(keysToGet);
         
         if (result[CONFIG.STORAGE_KEYS.POPUP_SETTINGS]) {
             this.settings = { ...this.settings, ...result[CONFIG.STORAGE_KEYS.POPUP_SETTINGS] };
@@ -66,6 +68,7 @@ class PopupController {
         if (result[CONFIG.STORAGE_KEYS.API_KEY]) {
             this.elements.apiKeyInput.value = "••••••••••••••••";
         }
+        this.updateLatestOtpDisplay(result[CONFIG.STORAGE_KEYS.LATEST_OTP]);
     }
 
     async saveSettings() {
@@ -86,9 +89,13 @@ class PopupController {
         }
     }
 
-    async updateLatestOtpDisplay() {
-        const result = await chrome.storage.local.get(CONFIG.STORAGE_KEYS.LATEST_OTP);
-        const latestOtp = result[CONFIG.STORAGE_KEYS.LATEST_OTP];
+    async updateLatestOtpDisplay(latestOtpData = null) {
+        let latestOtp = latestOtpData;
+        if (!latestOtp) {
+            const result = await chrome.storage.local.get(CONFIG.STORAGE_KEYS.LATEST_OTP);
+            latestOtp = result[CONFIG.STORAGE_KEYS.LATEST_OTP];
+        }
+
         if (latestOtp && latestOtp.otp) {
             this.elements.otpValue.textContent = latestOtp.otp;
             const timeAgo = this.formatTimeAgo(latestOtp.timestamp);
@@ -100,18 +107,20 @@ class PopupController {
     }
 
     async checkNanoStatus() {
-        this.setAiStatus('downloading', 'Checking Gemini Nano...');
+        this.setAiStatus('loading', 'Checking On-Device AI...');
         
         const response = await this.sendMessage({ action: CONFIG.ACTIONS.TEST_GEMINI_NANO });
 
         if (response.success) {
             if (response.status === 'downloading') {
-                this.setAiStatus('downloading', 'Nano model is downloading...');
+                this.setAiStatus('downloading', 'Model is downloading...');
+            } else if (response.status === 'downloadable') {
+                this.setAiStatus('download-required', 'Download On-Device AI');
             } else {
-                this.setAiStatus('ready', 'On-device AI is ready');
+                this.setAiStatus('ready', 'On-Device AI Ready');
             }
         } else {
-             this.setAiStatus('error', 'On-device AI unavailable');
+             this.setAiStatus('error', 'On-Device AI Unavailable');
         }
     }
 
@@ -120,19 +129,35 @@ class PopupController {
         const spinner = this.elements.aiStatusSpinner;
 
         // Reset classes
-        this.elements.aiStatusBar.classList.remove('ready', 'downloading', 'error');
+        this.elements.aiStatusBar.classList.remove('ready', 'downloading', 'error', 'download-required');
+        this.elements.aiStatusBar.onclick = null; // Clear previous click handlers
 
         if (status === 'downloading') {
             spinner.style.display = 'block';
             this.elements.aiStatusBar.classList.add('downloading');
+        } else if (status === 'download-required') {
+            spinner.style.display = 'none';
+            this.elements.aiStatusBar.classList.add('download-required');
+            this.elements.aiStatusBar.onclick = () => this.triggerNanoDownload();
+            this.elements.aiStatusBar.title = 'Click to start downloading the on-device AI model (approx. 400MB)';
         } else {
             spinner.style.display = 'none';
+            this.elements.aiStatusBar.title = '';
             if (status === 'ready') {
                  this.elements.aiStatusBar.classList.add('ready');
             } else if (status === 'error') {
                  this.elements.aiStatusBar.classList.add('error');
             }
         }
+    }
+
+    async triggerNanoDownload() {
+        this.setAiStatus('downloading', 'Starting download...');
+        // Sending the test message again will trigger the create() call in offscreen,
+        // which starts the download now that it's initiated by a user gesture.
+        await this.sendMessage({ action: CONFIG.ACTIONS.TEST_GEMINI_NANO });
+        // Periodically check status after triggering download
+        setTimeout(() => this.checkNanoStatus(), 2000);
     }
 
     toggleSettingsPanel() {

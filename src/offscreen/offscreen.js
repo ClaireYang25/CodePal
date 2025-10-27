@@ -33,8 +33,8 @@ async function initializeNano() {
 
     if (availability === 'after-download') {
       console.log('⏬ Gemini Nano model needs to be downloaded...');
-      // We will proceed to create(), which triggers the download.
-      // We can inform the user that a download is starting.
+      // Don't create session yet. Let the user trigger it.
+      return { success: false, error: 'Model needs to be downloaded.', status: 'downloadable' };
     }
 
     // Create session with proper output language configuration
@@ -71,7 +71,8 @@ async function extractOTPWithNano(emailContent, language) {
       if (!initResult.success) {
         return {
           success: false,
-          error: initResult.error
+          error: initResult.error,
+          status: initResult.status
         };
       }
     }
@@ -158,18 +159,13 @@ async function testNanoConnection() {
     if (!isInitialized) {
       const initResult = await initializeNano();
       if (!initResult.success) {
-        // If it needs downloading, that's not a hard error for a test,
-        // it's an expected state.
-        if (initResult.status === 'unavailable') {
-           return { success: false, error: initResult.error };
-        }
-        // For 'after-download', the create() call inside initializeNano already started it.
-        // Let's return a specific message.
-        return { success: true, message: 'Model is downloading. Please wait a few minutes and try again.', status: 'downloading' };
+        // For a test, this is not a hard error, but a state to report
+        return { success: true, message: initResult.error, status: initResult.status };
       }
     }
 
     if (!nanoSession) {
+      // This case should ideally not be reached if init was successful
       return {
         success: false,
         error: 'Session not created'

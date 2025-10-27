@@ -113,6 +113,12 @@ class BackgroundService {
         });
         
         console.log('📥 Nano returned:', JSON.stringify(nanoResult));
+
+        // If Nano requires a user-triggered download, skip it for now.
+        if (nanoResult?.status === 'downloadable') {
+            console.log('⚠️ Nano requires user-triggered download, skipping Tier 2 for this automatic run.');
+            throw new Error('Download required');
+        }
         
         if (nanoResult?.success) {
           console.log(`✅ OTP found via GEMINI NANO (confidence: ${nanoResult.confidence})`);
@@ -212,12 +218,13 @@ class BackgroundService {
    */
   async handleTestGeminiNano(sendResponse) {
     try {
-      console.log('🧪 Testing Gemini Nano...');
+      console.log('🧪 Testing Gemini Nano status...');
       
       const result = await this.callOffscreenNano({
         action: CONFIG.ACTIONS.OFFSCREEN_TEST_CONNECTION
       });
-      
+
+      console.log('🧪 Nano test result:', result);
       sendResponse(result);
       
     } catch (error) {
