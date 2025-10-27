@@ -42,8 +42,6 @@ class PopupController {
         chrome.runtime.onMessage.addListener((request) => {
             if (request.action === 'otpUpdated') {
                 this.updateLatestOtpDisplay();
-            } else if (request.action === 'nanoDownloadProgress') {
-                this.setAiStatus('downloading', `Downloading model... ${request.progress}%`);
             }
         });
     }
@@ -208,9 +206,10 @@ class PopupController {
             console.log('Type of session:', typeof session);
             console.log('Session object:', session);
             
-            // Keep checking status
-            this.setAiStatus('downloading', 'Download in progress...');
-            this.checkDownloadProgress();
+            // Download initiated successfully
+            console.log('✅ Download triggered - you can close this popup');
+            console.log('💡 Download will continue in background');
+            console.log('💡 Reopen popup in a few minutes to check if ready');
             
         } catch (error) {
             console.error('❌ ERROR:', error);
@@ -219,27 +218,6 @@ class PopupController {
             console.error('Error stack:', error.stack);
             this.setAiStatus('error', error.message || 'Download failed');
         }
-    }
-
-    async checkDownloadProgress() {
-        // Check every 2 seconds
-        const checkInterval = setInterval(async () => {
-            const status = await this.sendMessage({ action: CONFIG.ACTIONS.TEST_GEMINI_NANO });
-            
-            if (status.success && status.status === 'ready') {
-                // Download complete!
-                clearInterval(checkInterval);
-                this.setAiStatus('ready', 'On-Device AI Ready');
-            } else if (!status.success && status.status !== 'downloading') {
-                // Error occurred
-                clearInterval(checkInterval);
-                this.setAiStatus('error', 'Download failed');
-            }
-            // If still downloading, keep checking
-        }, 2000);
-
-        // Stop checking after 5 minutes (timeout)
-        setTimeout(() => clearInterval(checkInterval), 5 * 60 * 1000);
     }
 
     toggleSettingsPanel() {

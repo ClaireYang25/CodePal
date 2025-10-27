@@ -15,7 +15,6 @@ class BackgroundService {
     this.aiService = new AIService();
     this.otpEngine = new OTPEngine();
     this.offscreenCreated = false;
-    this.nanoDownloadProgress = 0; // Cache for current download progress
     this.init();
   }
 
@@ -44,12 +43,6 @@ class BackgroundService {
    */
   async handleMessage(request, sender, sendResponse) {
     try {
-      // Handle progress update separately as it's a broadcast
-      if (request.action === 'nanoDownloadProgress') {
-        this.handleNanoDownloadProgress(request.progress);
-        return; // No response needed
-      }
-
       // Ignore messages meant for offscreen document
       if (request.target === 'offscreen') {
         return;
@@ -58,8 +51,7 @@ class BackgroundService {
       const handlers = {
         [CONFIG.ACTIONS.EXTRACT_OTP]: () => this.handleExtractOTP(request, sendResponse),
         [CONFIG.ACTIONS.TEST_GEMINI_NANO]: () => this.handleTestGeminiNano(sendResponse),
-        [CONFIG.ACTIONS.TEST_GEMINI_API]: () => this.handleTestGeminiAPI(sendResponse),
-        'triggerNanoDownload': () => this.handleTriggerNanoDownload(sendResponse)
+        [CONFIG.ACTIONS.TEST_GEMINI_API]: () => this.handleTestGeminiAPI(sendResponse)
       };
 
       const handler = handlers[request.action];
@@ -72,17 +64,6 @@ class BackgroundService {
       console.error('❌ Message handling error:', error);
       sendResponse({ success: false, error: error.message });
     }
-  }
-
-  /**
-   * Handle Nano download progress updates and forward to popup
-   */
-  handleNanoDownloadProgress(progress) {
-    // Cache the current progress
-    this.nanoDownloadProgress = progress;
-    
-    // This is a fire-and-forget message to the popup
-    chrome.runtime.sendMessage({ action: 'nanoDownloadProgress', progress }).catch(() => {});
   }
 
   /**
@@ -250,13 +231,6 @@ class BackgroundService {
         action: CONFIG.ACTIONS.OFFSCREEN_TEST_CONNECTION
       });
 
-      // If downloading, attach the cached progress
-      if (result.status === 'downloading' && this.nanoDownloadProgress > 0) {
-        result.progress = this.nanoDownloadProgress;
-      } else if (result.status === 'ready') {
-        // Download completed, reset progress cache
-        this.nanoDownloadProgress = 0;
-      }
 
       console.log('🧪 Nano test result:', JSON.stringify(result, null, 2));
       console.log('🧪 Result breakdown:', {
@@ -270,29 +244,6 @@ class BackgroundService {
       
     } catch (error) {
       console.error('❌ Nano test failed:', error);
-      sendResponse({ 
-        success: false, 
-        error: error.message 
-      });
-    }
-  }
-
-  /**
-   * Trigger Nano download (user-initiated)
-   */
-  async handleTriggerNanoDownload(sendResponse) {
-    try {
-      console.log('⏬ User triggered Nano download...');
-      
-      const result = await this.callOffscreenNano({
-        action: 'forceDownload'
-      });
-
-      console.log('⏬ Download trigger result:', JSON.stringify(result, null, 2));
-      sendResponse(result);
-      
-    } catch (error) {
-      console.error('❌ Download trigger failed:', error);
       sendResponse({ 
         success: false, 
         error: error.message 

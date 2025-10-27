@@ -201,75 +201,6 @@ async function testNanoConnection() {
 }
 
 /**
- * Force initialize Nano (when user explicitly triggers download)
- * Based on FeedMeJD's successful pattern
- */
-async function forceInitializeNano() {
-  try {
-    console.log('🚀 Force initializing Nano (user-triggered)...');
-    
-    if (typeof globalThis.LanguageModel === 'undefined') {
-      return { success: false, error: 'LanguageModel API not available', status: 'unavailable' };
-    }
-
-    const availability = await globalThis.LanguageModel.availability();
-    console.log('📊 Current availability:', availability);
-    
-    const availabilityLower = String(availability).toLowerCase();
-
-    // Check if device supports Nano at all
-    if (availabilityLower === 'no' || availabilityLower === 'unavailable') {
-      return { success: false, error: 'Device does not support Gemini Nano', status: 'unavailable' };
-    }
-
-    // For force download, we proceed to create() even if 'downloadable' or 'downloading'
-    // The user gesture from the button click allows this
-    console.log('📝 Creating session (will trigger download if needed)...');
-    
-    let downloadStarted = false;
-    
-    nanoSession = await globalThis.LanguageModel.create({
-      systemPrompt: 'You are a verification code extraction assistant. Always respond in English with valid JSON format.',
-      monitor(m) {
-        m.addEventListener('downloadprogress', (e) => {
-          if (!downloadStarted) {
-            console.log('⏬ Model download started!');
-            downloadStarted = true;
-          }
-          const progress = Math.round(e.loaded * 100);
-          console.log(`⏬ Download progress: ${progress}%`);
-          
-          // Send progress update to the service worker
-          chrome.runtime.sendMessage({
-            action: 'nanoDownloadProgress',
-            progress: progress
-          });
-        });
-      },
-    });
-
-    console.log('✅ Nano session created successfully');
-    isInitialized = true;
-    
-    // Check current availability again to determine if we're downloading or ready
-    const currentAvailability = await globalThis.LanguageModel.availability();
-    const currentStatus = String(currentAvailability).toLowerCase();
-    
-    console.log('📊 Post-create availability:', currentAvailability);
-    
-    if (currentStatus === 'downloading') {
-      return { success: true, status: 'downloading', message: 'Model download in progress' };
-    } else {
-      return { success: true, status: 'ready', message: 'Session ready' };
-    }
-
-  } catch (error) {
-    console.error('❌ Force init failed:', error);
-    return { success: false, error: error.message, status: 'error' };
-  }
-}
-
-/**
  * Destroy Nano session
  */
 function destroyNano() {
@@ -318,12 +249,6 @@ async function handleMessage(request, sendResponse) {
         sendResponse(testResult);
         break;
 
-      case 'forceDownload':
-        // User clicked the download button, so we have a user gesture
-        // Force initialization even if downloadable
-        const downloadResult = await forceInitializeNano();
-        sendResponse(downloadResult);
-        break;
 
       case 'destroy':
         destroyNano();
