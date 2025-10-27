@@ -92,7 +92,7 @@ class PopupController {
     async updateLatestOtpDisplay(latestOtpData = null) {
         let latestOtp = latestOtpData;
         if (!latestOtp) {
-            const result = await chrome.storage.local.get(CONFIG.STORAGE_KEYS.LATEST_OTP);
+            const result = await chrome.storage.local.get([CONFIG.STORAGE_KEYS.LATEST_OTP]);
             latestOtp = result[CONFIG.STORAGE_KEYS.LATEST_OTP];
         }
 
