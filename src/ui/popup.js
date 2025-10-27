@@ -113,16 +113,28 @@ class PopupController {
         
         // First check local storage for ongoing download
         const storage = await chrome.storage.local.get(['nanoDownloadInProgress', 'nanoDownloadProgress']);
+        console.log('💾 Storage check:', storage);
         
-        if (storage.nanoDownloadInProgress) {
+        // Query backend to get real status
+        const response = await this.sendMessage({ action: CONFIG.ACTIONS.TEST_GEMINI_NANO });
+        console.log('📬 Popup received response from Service Worker:', JSON.stringify(response, null, 2));
+        
+        // If storage says downloading but backend says downloadable, clear stale flag
+        if (storage.nanoDownloadInProgress && response?.status === 'downloadable') {
+            console.warn('⚠️ Clearing stale download flag from storage');
+            await chrome.storage.local.set({ 
+                nanoDownloadInProgress: false,
+                nanoDownloadProgress: 0
+            });
+        }
+        
+        // If storage shows ongoing download and backend confirms it's downloading or ready
+        if (storage.nanoDownloadInProgress && (response?.status === 'downloading' || response?.status === 'ready')) {
             // Download is ongoing, show progress from storage
             const progress = storage.nanoDownloadProgress || 0;
             this.setAiStatus('downloading', `Downloading model... ${progress}%`);
             return;
         }
-        
-        const response = await this.sendMessage({ action: CONFIG.ACTIONS.TEST_GEMINI_NANO });
-        console.log('📬 Popup received response from Service Worker:', JSON.stringify(response, null, 2));
 
         if (response && response.success) {
             if (response.status === 'downloading') {
@@ -172,6 +184,7 @@ class PopupController {
     }
 
     async triggerNanoDownload() {
+        console.log('🎯 triggerNanoDownload CALLED - user clicked download button');
         this.setAiStatus('downloading', 'Starting download...');
         
         try {
@@ -179,8 +192,10 @@ class PopupController {
             
             // Check API availability
             if (typeof globalThis.LanguageModel === 'undefined') {
+                console.error('❌ LanguageModel API not available');
                 throw new Error('LanguageModel API not available');
             }
+            console.log('✅ LanguageModel API is available');
             
             const availability = await globalThis.LanguageModel.availability();
             console.log('📊 Availability:', availability);
