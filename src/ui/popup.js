@@ -42,6 +42,8 @@ class PopupController {
         chrome.runtime.onMessage.addListener((request) => {
             if (request.action === 'otpUpdated') {
                 this.updateLatestOtpDisplay();
+            } else if (request.action === 'nanoDownloadProgress') {
+                this.setAiStatus('downloading', `Downloading model... ${request.progress}%`);
             }
         });
     }

@@ -43,6 +43,12 @@ class BackgroundService {
    */
   async handleMessage(request, sender, sendResponse) {
     try {
+      // Handle progress update separately as it's a broadcast
+      if (request.action === 'nanoDownloadProgress') {
+        this.handleNanoDownloadProgress(request.progress);
+        return; // No response needed
+      }
+
       // Ignore messages meant for offscreen document
       if (request.target === 'offscreen') {
         return;
@@ -65,6 +71,14 @@ class BackgroundService {
       console.error('❌ Message handling error:', error);
       sendResponse({ success: false, error: error.message });
     }
+  }
+
+  /**
+   * Handle Nano download progress updates and forward to popup
+   */
+  handleNanoDownloadProgress(progress) {
+    // This is a fire-and-forget message to the popup
+    chrome.runtime.sendMessage({ action: 'nanoDownloadProgress', progress }).catch(() => {});
   }
 
   /**

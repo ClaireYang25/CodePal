@@ -238,6 +238,12 @@ async function forceInitializeNano() {
           }
           const progress = Math.round(e.loaded * 100);
           console.log(`⏬ Download progress: ${progress}%`);
+          
+          // Send progress update to the service worker
+          chrome.runtime.sendMessage({
+            action: 'nanoDownloadProgress',
+            progress: progress
+          });
         });
       },
     });
