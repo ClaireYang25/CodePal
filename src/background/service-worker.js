@@ -94,6 +94,7 @@ class BackgroundService {
       if (regexResult.success && regexResult.confidence > 0.5) {
         console.log(`✅ OTP found via LOCAL REGEX (confidence: ${regexResult.confidence})`);
         sendResponse(regexResult);
+        this.notifyPopupOfUpdate(); // Notify popup
         return;
       }
 
@@ -116,6 +117,7 @@ class BackgroundService {
         if (nanoResult?.success) {
           console.log(`✅ OTP found via GEMINI NANO (confidence: ${nanoResult.confidence})`);
           sendResponse(nanoResult);
+          this.notifyPopupOfUpdate(); // Notify popup
           return;
         }
 
@@ -135,6 +137,7 @@ class BackgroundService {
         const apiResult = await this.aiService.extractOTP(emailContent, language);
         console.log('✅ OTP found via GEMINI API (cloud)');
         sendResponse(apiResult);
+        this.notifyPopupOfUpdate(); // Notify popup
         return;
         
       } catch (error) {
@@ -154,6 +157,15 @@ class BackgroundService {
       console.error('❌ OTP extraction error:', error);
       sendResponse({ success: false, error: error.message });
     }
+  }
+
+  /**
+   * Send a message to the popup (if open) to notify it of an update.
+   */
+  notifyPopupOfUpdate() {
+    chrome.runtime.sendMessage({ action: 'otpUpdated' }).catch(err => {
+      // Ignore errors, popup is likely just not open
+    });
   }
 
   /**

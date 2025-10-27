@@ -4,318 +4,62 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Gmail OTP AutoFill</title>
-    <style>
-        body {
-            width: 350px;
-            min-height: 400px;
-            margin: 0;
-            padding: 0;
-            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
-            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-            color: white;
-        }
-
-        .header {
-            padding: 20px;
-            text-align: center;
-            background: rgba(255, 255, 255, 0.1);
-            backdrop-filter: blur(10px);
-        }
-
-        .header h1 {
-            margin: 0;
-            font-size: 18px;
-            font-weight: 600;
-        }
-
-        .header p {
-            margin: 5px 0 0 0;
-            font-size: 12px;
-            opacity: 0.8;
-        }
-
-        .content {
-            padding: 20px;
-        }
-
-        .status-card {
-            background: rgba(255, 255, 255, 0.15);
-            border-radius: 12px;
-            padding: 15px;
-            margin-bottom: 15px;
-            backdrop-filter: blur(10px);
-        }
-
-        .status-item {
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-            margin-bottom: 10px;
-        }
-
-        .status-item:last-child {
-            margin-bottom: 0;
-        }
-
-        .status-label {
-            font-size: 14px;
-            font-weight: 500;
-        }
-
-        .status-value {
-            font-size: 12px;
-            padding: 4px 8px;
-            border-radius: 6px;
-            background: rgba(255, 255, 255, 0.2);
-        }
-
-        .status-value.connected {
-            background: rgba(76, 175, 80, 0.3);
-        }
-
-        .status-value.disconnected {
-            background: rgba(244, 67, 54, 0.3);
-        }
-
-        .button {
-            width: 100%;
-            padding: 12px;
-            border: none;
-            border-radius: 8px;
-            font-size: 14px;
-            font-weight: 500;
-            cursor: pointer;
-            transition: all 0.3s ease;
-            margin-bottom: 10px;
-        }
-
-        .button.primary {
-            background: rgba(255, 255, 255, 0.2);
-            color: white;
-            border: 1px solid rgba(255, 255, 255, 0.3);
-        }
-
-        .button.primary:hover {
-            background: rgba(255, 255, 255, 0.3);
-        }
-
-        .button.secondary {
-            background: transparent;
-            color: white;
-            border: 1px solid rgba(255, 255, 255, 0.5);
-        }
-
-        .button.secondary:hover {
-            background: rgba(255, 255, 255, 0.1);
-        }
-
-        .settings-section {
-            margin-top: 20px;
-        }
-
-        .settings-title {
-            font-size: 16px;
-            font-weight: 600;
-            margin-bottom: 15px;
-        }
-
-        .setting-item {
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-            margin-bottom: 12px;
-        }
-
-        .setting-label {
-            font-size: 14px;
-        }
-
-        .toggle {
-            position: relative;
-            width: 50px;
-            height: 24px;
-            background: rgba(255, 255, 255, 0.3);
-            border-radius: 12px;
-            cursor: pointer;
-            transition: background 0.3s ease;
-        }
-
-        .toggle.active {
-            background: rgba(76, 175, 80, 0.8);
-        }
-
-        .toggle::after {
-            content: '';
-            position: absolute;
-            top: 2px;
-            left: 2px;
-            width: 20px;
-            height: 20px;
-            background: white;
-            border-radius: 50%;
-            transition: transform 0.3s ease;
-        }
-
-        .toggle.active::after {
-            transform: translateX(26px);
-        }
-
-        .input-group {
-            margin-bottom: 15px;
-        }
-
-        .input-label {
-            display: block;
-            font-size: 12px;
-            margin-bottom: 5px;
-            opacity: 0.8;
-        }
-
-        .input-field {
-            width: 100%;
-            padding: 10px;
-            border: 1px solid rgba(255, 255, 255, 0.3);
-            border-radius: 6px;
-            background: rgba(255, 255, 255, 0.1);
-            color: white;
-            font-size: 14px;
-            box-sizing: border-box;
-        }
-
-        .input-field::placeholder {
-            color: rgba(255, 255, 255, 0.6);
-        }
-
-        .privacy-notice {
-            background: rgba(255, 255, 255, 0.1);
-            border-radius: 8px;
-            padding: 12px;
-            margin-top: 15px;
-            font-size: 11px;
-            line-height: 1.4;
-            opacity: 0.8;
-        }
-
-        .footer {
-            padding: 15px 20px;
-            text-align: center;
-            font-size: 11px;
-            opacity: 0.7;
-            border-top: 1px solid rgba(255, 255, 255, 0.1);
-        }
-
-        .hidden {
-            display: none;
-        }
-
-        .loading {
-            opacity: 0.6;
-            pointer-events: none;
-        }
-
-        .error {
-            background: rgba(244, 67, 54, 0.3);
-            border: 1px solid rgba(244, 67, 54, 0.5);
-            color: white;
-            padding: 10px;
-            border-radius: 6px;
-            margin-bottom: 10px;
-            font-size: 12px;
-        }
-
-        .success {
-            background: rgba(76, 175, 80, 0.3);
-            border: 1px solid rgba(76, 175, 80, 0.5);
-            color: white;
-            padding: 10px;
-            border-radius: 6px;
-            margin-bottom: 10px;
-            font-size: 12px;
-        }
-    </style>
+    <link rel="stylesheet" href="popup.css">
 </head>
 <body>
-    <div class="header">
-        <h1>Gmail OTP AutoFill</h1>
-        <p>Intelligent OTP Auto-Fill</p>
-    </div>
-
-    <div class="content">
-        <!-- Status Card -->
-        <div class="status-card">
-            <div class="status-item">
-                <span class="status-label">Extension Status</span>
-                <span class="status-value connected" id="extension-status">Active</span>
+    <div class="container">
+        <header>
+            <div class="title">
+                <img src="../../assets/icons/icon48.png" alt="logo" class="logo">
+                <h1>Gmail OTP AutoFill</h1>
             </div>
-            <div class="status-item">
-                <span class="status-label">AI Service</span>
-                <span class="status-value" id="ai-status">Checking...</span>
+            <div id="extension-status" class="status-indicator-inactive" title="Extension Status"></div>
+        </header>
+
+        <main>
+            <div class="otp-display-wrapper">
+                <p class="otp-label">LATEST VERIFICATION CODE</p>
+                <div id="otp-display" class="otp-code" title="Click to copy">
+                    <span id="otp-value">-- -- -- --</span>
+                </div>
+                <p id="otp-timestamp" class="otp-time">Waiting for new OTP emails...</p>
             </div>
-            <div class="status-item">
-                <span class="status-label">Latest OTP</span>
-                <span class="status-value" id="latest-otp">None</span>
+        </main>
+
+        <footer>
+            <div id="ai-status-bar" class="ai-status">
+                <div class="spinner-light" style="display: none;"></div>
+                <span id="ai-status-text">Initializing...</span>
             </div>
-        </div>
+            <div id="settings-toggle" class="settings-icon" title="Settings">
+                <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" width="20" height="20">
+                    <path d="M19.14,12.94c0.04-0.3,0.06-0.61,0.06-0.94c0-0.32-0.02-0.64-0.07-0.94l2.03-1.58c0.18-0.14,0.23-0.41,0.12-0.61 l-1.92-3.32c-0.12-0.22-0.37-0.29-0.59-0.22l-2.39,0.96c-0.5-0.38-1.03-0.7-1.62-0.94L14.4,2.81c-0.04-0.24-0.24-0.41-0.48-0.41 h-3.84c-0.24,0-0.44,0.17-0.48,0.41L9.12,4.72c-0.59,0.24-1.12,0.56-1.62,0.94L5.11,4.7c-0.22-0.08-0.47,0-0.59,0.22 L2.6,8.24C2.48,8.44,2.54,8.71,2.72,8.85l2.03,1.58C4.72,10.76,4.7,11.08,4.7,11.4c0,0.32,0.02,0.64,0.07,0.94l-2.03,1.58 c-0.18,0.14-0.23,0.41-0.12,0.61l1.92,3.32c0.12,0.22,0.37,0.29,0.59,0.22l2.39-0.96c0.5,0.38,1.03,0.7,1.62,0.94l0.48,2.81 c0.04,0.24,0.24,0.41,0.48,0.41h3.84c0.24,0,0.44-0.17,0.48-0.41l0.48-2.81c0.59-0.24,1.12-0.56,1.62-0.94l2.39,0.96 c0.22,0.08,0.47,0,0.59-0.22l1.92-3.32c0.12-0.22,0.07-0.47-0.12-0.61L19.14,12.94z M12,15.6c-1.98,0-3.6-1.62-3.6-3.6 s1.62-3.6,3.6-3.6s3.6,1.62,3.6,3.6S13.98,15.6,12,15.6z"/>
+                </svg>
+            </div>
+        </footer>
 
-        <!-- User Tip -->
-        <div class="privacy-notice" style="margin-bottom: 15px; background: rgba(33, 150, 243, 0.2); border-left: 3px solid #2196F3;">
-            <strong>💡 Quick Tip:</strong><br>
-            Keep your Gmail tab open in the background for automatic OTP detection.<br>
-            <span style="font-size: 11px; opacity: 0.8;">Tip: Right-click tab → "Pin tab"</span>
-        </div>
-
-        <!-- Action Buttons -->
-        <button class="button secondary" id="test-gemini-nano">Test Gemini Nano</button>
-        <button class="button secondary" id="test-gemini-api">Test Gemini API</button>
-        <button class="button secondary" id="clear-data">Clear Data</button>
-
-        <!-- Settings Section -->
-        <div class="settings-section">
-            <div class="settings-title">Settings</div>
-            
+        <div id="settings-panel" class="settings-panel-hidden">
+            <h3>Settings</h3>
             <div class="setting-item">
-                <span class="setting-label">Auto-Fill</span>
-                <div class="toggle" id="auto-fill-toggle"></div>
+                <label for="cloud-fallback-toggle">Enable Cloud AI Fallback</label>
+                <div class="toggle-switch">
+                    <input type="checkbox" id="cloud-fallback-toggle">
+                    <label for="cloud-fallback-toggle"></label>
+                </div>
             </div>
-            
-            <div class="setting-item">
-                <span class="setting-label">Gemini Nano</span>
-                <div class="toggle active" id="gemini-nano-toggle"></div>
+            <div id="api-key-section" class="api-key-section-hidden">
+                <label for="api-key-input">Gemini API Key</label>
+                <div class="api-key-input-wrapper">
+                    <input type="password" id="api-key-input" placeholder="Enter your Gemini API key">
+                    <button id="save-api-key">Save</button>
+                </div>
+                 <p class="api-key-note">Cloud AI provides higher accuracy but requires an API key and network connection.</p>
             </div>
-            
-            <div class="setting-item">
-                <span class="setting-label">Gemini API Fallback</span>
-                <div class="toggle" id="gemini-api-fallback-toggle"></div>
+             <div class="setting-item">
+                <button id="clear-data" class="button-secondary">Clear Cached Data</button>
             </div>
-            
-            <div class="setting-item">
-                <span class="setting-label">Notifications</span>
-                <div class="toggle" id="notification-toggle"></div>
-            </div>
-        </div>
-
-        <!-- API Key Input -->
-        <div class="input-group">
-            <label class="input-label">Gemini API Key</label>
-            <input type="password" class="input-field" id="api-key-input" placeholder="Enter your Gemini API key">
-            <button class="button secondary" id="save-api-key">Save Key</button>
-        </div>
-
-        <!-- Privacy Notice -->
-        <div class="privacy-notice">
-            <strong>Privacy First:</strong><br>
-            • No authentication required<br>
-            • Reads only visible Gmail content<br>
-            • Processes locally with Gemini Nano<br>
-            • Cloud API only if configured
         </div>
     </div>
-
-    <div class="footer">
-        <p>Gmail OTP AutoFill v1.0.0</p>
-        <p>Install and use - no setup needed!</p>
-    </div>
-
     <script type="module" src="popup.js"></script>
 </body>
 </html>
