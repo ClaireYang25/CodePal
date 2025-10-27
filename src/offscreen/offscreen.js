@@ -32,10 +32,22 @@ async function initializeNano() {
       return { success: false, error: errorMsg, status: 'unavailable' };
     }
 
-    if (availability === 'after-download') {
-      console.log('⏬ Gemini Nano model needs to be downloaded...');
-      // Don't create session yet. Let the user trigger it.
-      return { success: false, error: 'Model needs to be downloaded.', status: 'downloadable' };
+    // Handle different availability states
+    if (availability === 'after-download' || availability === 'downloadable') {
+      console.log('⏬ Gemini Nano model needs to be downloaded (user gesture required)');
+      // Don't create session yet. Return downloadable status for UI to handle.
+      return { success: true, message: 'Model ready to download', status: 'downloadable' };
+    }
+
+    if (availability === 'downloading') {
+      console.log('⏬ Gemini Nano model is currently downloading...');
+      return { success: true, message: 'Model is downloading', status: 'downloading' };
+    }
+
+    // Only create session if model is readily available
+    if (availability !== 'readily') {
+      console.warn('⚠️ Unexpected availability state:', availability);
+      return { success: false, error: `Unexpected availability: ${availability}`, status: 'unavailable' };
     }
 
     // Create session with proper output language configuration
@@ -192,6 +204,45 @@ async function testNanoConnection() {
 }
 
 /**
+ * Force initialize Nano (when user explicitly triggers download)
+ */
+async function forceInitializeNano() {
+  try {
+    console.log('🚀 Force initializing Nano (user-triggered)...');
+    
+    if (typeof globalThis.LanguageModel === 'undefined') {
+      return { success: false, error: 'LanguageModel API not available', status: 'unavailable' };
+    }
+
+    const availability = await globalThis.LanguageModel.availability();
+    console.log('📊 Current availability:', availability);
+
+    // For force download, we proceed even if it's 'downloadable' or 'downloading'
+    nanoSession = await globalThis.LanguageModel.create({
+      systemPrompt: 'You are a verification code extraction assistant. Always respond in English with valid JSON format.',
+      expectedOutputs: [
+        { type: 'text', language: 'en' }
+      ],
+      monitor(m) {
+        m.addEventListener('downloadprogress', (e) => {
+          const progress = Math.round(e.loaded * 100);
+          console.log(`⏬ Download progress: ${progress}%`);
+          // Could send progress updates to UI here
+        });
+      },
+    });
+
+    console.log('✅ Nano session created (download started or completed)');
+    isInitialized = true;
+    return { success: true, status: 'ready', message: 'Download initiated' };
+
+  } catch (error) {
+    console.error('❌ Force init failed:', error);
+    return { success: false, error: error.message, status: 'error' };
+  }
+}
+
+/**
  * Destroy Nano session
  */
 function destroyNano() {
@@ -230,6 +281,13 @@ async function handleMessage(request, sendResponse) {
       case CONFIG.ACTIONS.OFFSCREEN_TEST_CONNECTION:
         const testResult = await testNanoConnection();
         sendResponse(testResult);
+        break;
+
+      case 'forceDownload':
+        // User clicked the download button, so we have a user gesture
+        // Force initialization even if downloadable
+        const downloadResult = await forceInitializeNano();
+        sendResponse(downloadResult);
         break;
 
       case 'destroy':

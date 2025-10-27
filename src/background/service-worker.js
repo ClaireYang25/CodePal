@@ -46,7 +46,8 @@ class BackgroundService {
       const handlers = {
         [CONFIG.ACTIONS.EXTRACT_OTP]: () => this.handleExtractOTP(request, sendResponse),
         [CONFIG.ACTIONS.TEST_GEMINI_NANO]: () => this.handleTestGeminiNano(sendResponse),
-        [CONFIG.ACTIONS.TEST_GEMINI_API]: () => this.handleTestGeminiAPI(sendResponse)
+        [CONFIG.ACTIONS.TEST_GEMINI_API]: () => this.handleTestGeminiAPI(sendResponse),
+        'triggerNanoDownload': () => this.handleTriggerNanoDownload(sendResponse)
       };
 
       const handler = handlers[request.action];
@@ -235,6 +236,29 @@ class BackgroundService {
       
     } catch (error) {
       console.error('❌ Nano test failed:', error);
+      sendResponse({ 
+        success: false, 
+        error: error.message 
+      });
+    }
+  }
+
+  /**
+   * Trigger Nano download (user-initiated)
+   */
+  async handleTriggerNanoDownload(sendResponse) {
+    try {
+      console.log('⏬ User triggered Nano download...');
+      
+      const result = await this.callOffscreenNano({
+        action: 'forceDownload'
+      });
+
+      console.log('⏬ Download trigger result:', JSON.stringify(result, null, 2));
+      sendResponse(result);
+      
+    } catch (error) {
+      console.error('❌ Download trigger failed:', error);
       sendResponse({ 
         success: false, 
         error: error.message 

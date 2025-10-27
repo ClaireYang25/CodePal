@@ -153,11 +153,40 @@ class PopupController {
 
     async triggerNanoDownload() {
         this.setAiStatus('downloading', 'Starting download...');
-        // Sending the test message again will trigger the create() call in offscreen,
-        // which starts the download now that it's initiated by a user gesture.
-        await this.sendMessage({ action: CONFIG.ACTIONS.TEST_GEMINI_NANO });
-        // Periodically check status after triggering download
-        setTimeout(() => this.checkNanoStatus(), 2000);
+        
+        // Send the forceDownload action which will create the session with user gesture
+        const result = await this.sendMessage({ action: 'triggerNanoDownload' });
+        
+        if (result.success) {
+            // Download started successfully
+            this.setAiStatus('downloading', 'Downloading model...');
+            // Check status periodically
+            this.checkDownloadProgress();
+        } else {
+            // Download failed
+            this.setAiStatus('error', result.error || 'Download failed');
+        }
+    }
+
+    async checkDownloadProgress() {
+        // Check every 2 seconds
+        const checkInterval = setInterval(async () => {
+            const status = await this.sendMessage({ action: CONFIG.ACTIONS.TEST_GEMINI_NANO });
+            
+            if (status.success && status.status === 'ready') {
+                // Download complete!
+                clearInterval(checkInterval);
+                this.setAiStatus('ready', 'On-Device AI Ready');
+            } else if (!status.success && status.status !== 'downloading') {
+                // Error occurred
+                clearInterval(checkInterval);
+                this.setAiStatus('error', 'Download failed');
+            }
+            // If still downloading, keep checking
+        }, 2000);
+
+        // Stop checking after 5 minutes (timeout)
+        setTimeout(() => clearInterval(checkInterval), 5 * 60 * 1000);
     }
 
     toggleSettingsPanel() {
