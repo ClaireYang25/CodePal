@@ -111,6 +111,16 @@ class PopupController {
     async checkNanoStatus() {
         this.setAiStatus('loading', 'Checking On-Device AI...');
         
+        // First check local storage for ongoing download
+        const storage = await chrome.storage.local.get(['nanoDownloadInProgress', 'nanoDownloadProgress']);
+        
+        if (storage.nanoDownloadInProgress) {
+            // Download is ongoing, show progress from storage
+            const progress = storage.nanoDownloadProgress || 0;
+            this.setAiStatus('downloading', `Downloading model... ${progress}%`);
+            return;
+        }
+        
         const response = await this.sendMessage({ action: CONFIG.ACTIONS.TEST_GEMINI_NANO });
         console.log('📬 Popup received response from Service Worker:', JSON.stringify(response, null, 2));
 
@@ -165,8 +175,7 @@ class PopupController {
         this.setAiStatus('downloading', 'Starting download...');
         
         try {
-            // Call Nano directly from popup (we have window and user gesture here)
-            console.log('🚀 Starting Nano download directly from popup...');
+            console.log('🚀 Initiating Nano download from popup with user gesture...');
             
             // Check API availability
             if (typeof globalThis.LanguageModel === 'undefined') {
@@ -180,31 +189,52 @@ class PopupController {
                 throw new Error('Gemini Nano not supported on this device');
             }
             
-            // Create session - this will trigger download if needed
-            console.log('📝 Creating LanguageModel session...');
-            const session = await globalThis.LanguageModel.create({
+            // Mark that download has been user-initiated
+            await chrome.storage.local.set({ nanoDownloadInitiated: true });
+            
+            // Create a persistent session - DON'T destroy it until download completes
+            console.log('📝 Creating persistent LanguageModel session...');
+            
+            // Store session in a way that survives popup closure
+            // We'll create it but let it live until download completes
+            window.nanoDownloadSession = await globalThis.LanguageModel.create({
                 systemPrompt: 'You are a verification code extraction assistant.',
                 monitor(m) {
-                    m.addEventListener('downloadprogress', (e) => {
+                    m.addEventListener('downloadprogress', async (e) => {
                         const progress = Math.round(e.loaded * 100);
                         console.log(`⏬ Download progress: ${progress}%`);
-                        // Update UI directly
-                        document.getElementById('ai-status-text').textContent = `Downloading model... ${progress}%`;
+                        
+                        // Update local UI
+                        const statusText = document.getElementById('ai-status-text');
+                        if (statusText) {
+                            statusText.textContent = `Downloading model... ${progress}%`;
+                        }
+                        
+                        // Save progress to storage for persistence
+                        await chrome.storage.local.set({ 
+                            nanoDownloadProgress: progress,
+                            nanoDownloadInProgress: progress < 100
+                        });
+                        
+                        // If complete, mark as done
+                        if (progress >= 100) {
+                            await chrome.storage.local.set({ 
+                                nanoDownloadInitiated: false,
+                                nanoDownloadInProgress: false
+                            });
+                        }
                     });
                 }
             });
             
-            console.log('✅ Session created successfully');
+            console.log('✅ Download session created and will persist');
             
-            // Clean up the session immediately (we just wanted to trigger download)
-            await session.destroy();
-            console.log('🗑️ Session destroyed');
-            
-            // Now check status via background to verify
+            // Start checking progress
             this.checkDownloadProgress();
             
         } catch (error) {
             console.error('❌ Download failed:', error);
+            await chrome.storage.local.set({ nanoDownloadInitiated: false });
             this.setAiStatus('error', error.message || 'Download failed');
         }
     }
