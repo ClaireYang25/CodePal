@@ -131,6 +131,41 @@ footer {
     gap: 8px;
     font-size: 12px;
     color: var(--text-secondary);
+    transition: all 0.2s ease;
+}
+
+/* AI Status States */
+.ai-status.ready {
+    color: var(--status-active);
+    font-weight: 500;
+}
+
+.ai-status.downloading {
+    color: var(--status-downloading);
+    font-weight: 500;
+}
+
+.ai-status.error {
+    color: var(--status-inactive);
+}
+
+.ai-status.download-required {
+    color: var(--accent-color);
+    font-weight: 500;
+    cursor: pointer;
+    padding: 8px 12px;
+    margin: -8px -12px;
+    border-radius: 4px;
+    transition: background-color 0.2s, transform 0.1s;
+}
+
+.ai-status.download-required:hover {
+    background-color: rgba(0, 82, 204, 0.08);
+    transform: translateX(-2px);
+}
+
+.ai-status.download-required:active {
+    transform: translateX(-1px);
 }
 
 .settings-icon {
