@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<html lang="zh-CN">
+<html lang="en">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
@@ -237,79 +237,79 @@
 <body>
     <div class="header">
         <h1>Gmail OTP AutoFill</h1>
-        <p>智能验证码自动填充</p>
+        <p>Intelligent OTP Auto-Fill</p>
     </div>
 
     <div class="content">
-        <!-- 状态卡片 -->
+        <!-- Status Card -->
         <div class="status-card">
             <div class="status-item">
-                <span class="status-label">Gmail 连接</span>
-                <span class="status-value" id="gmail-status">检查中...</span>
+                <span class="status-label">Gmail</span>
+                <span class="status-value" id="gmail-status">Checking...</span>
             </div>
             <div class="status-item">
-                <span class="status-label">AI 服务</span>
-                <span class="status-value" id="ai-status">检查中...</span>
+                <span class="status-label">AI Service</span>
+                <span class="status-value" id="ai-status">Checking...</span>
             </div>
             <div class="status-item">
-                <span class="status-label">最新 OTP</span>
-                <span class="status-value" id="latest-otp">无</span>
+                <span class="status-label">Latest OTP</span>
+                <span class="status-value" id="latest-otp">None</span>
             </div>
         </div>
 
-        <!-- 操作按钮 -->
-        <button class="button primary" id="connect-gmail">连接 Gmail</button>
-        <button class="button secondary" id="test-chrome-prompt-api">测试 Chrome Prompt API</button>
-        <button class="button secondary" id="test-gemini-api">测试 Gemini API</button>
-        <button class="button secondary" id="clear-data">清除数据</button>
+        <!-- Action Buttons -->
+        <button class="button primary" id="connect-gmail">Connect Gmail</button>
+        <button class="button secondary" id="test-chrome-prompt-api">Test Gemini Nano</button>
+        <button class="button secondary" id="test-gemini-api">Test Gemini API</button>
+        <button class="button secondary" id="clear-data">Clear Data</button>
 
-        <!-- 设置区域 -->
+        <!-- Settings Section -->
         <div class="settings-section">
-            <div class="settings-title">设置</div>
+            <div class="settings-title">Settings</div>
             
             <div class="setting-item">
-                <span class="setting-label">自动填充</span>
+                <span class="setting-label">Auto-Fill</span>
                 <div class="toggle" id="auto-fill-toggle"></div>
             </div>
             
             <div class="setting-item">
-                <span class="setting-label">Chrome Prompt API</span>
+                <span class="setting-label">Gemini Nano</span>
                 <div class="toggle" id="chrome-prompt-api-toggle"></div>
             </div>
             
             <div class="setting-item">
-                <span class="setting-label">Gemini API 备用</span>
+                <span class="setting-label">Gemini API Fallback</span>
                 <div class="toggle" id="gemini-api-toggle"></div>
             </div>
             
             <div class="setting-item">
-                <span class="setting-label">通知提醒</span>
+                <span class="setting-label">Notifications</span>
                 <div class="toggle" id="notification-toggle"></div>
             </div>
         </div>
 
-        <!-- API 密钥设置 -->
+        <!-- API Key Input -->
         <div class="input-group">
-            <label class="input-label">Gemini API 密钥</label>
-            <input type="password" class="input-field" id="api-key-input" placeholder="输入您的 Gemini API 密钥">
-            <button class="button secondary" id="save-api-key">保存密钥</button>
+            <label class="input-label">Gemini API Key</label>
+            <input type="password" class="input-field" id="api-key-input" placeholder="Enter your Gemini API key">
+            <button class="button secondary" id="save-api-key">Save Key</button>
         </div>
 
-        <!-- 隐私声明 -->
+        <!-- Privacy Notice -->
         <div class="privacy-notice">
-            <strong>隐私保护：</strong><br>
-            • 仅使用 gmail.readonly 权限<br>
-            • 优先本地处理，AI 仅作增强<br>
-            • 不存储邮件内容<br>
-            • 遵循最小权限原则
+            <strong>Privacy Protection:</strong><br>
+            • Only uses gmail.readonly permission<br>
+            • Local processing prioritized, AI only for enhancement<br>
+            • No email content storage<br>
+            • Follows minimum permission principle
         </div>
     </div>
 
     <div class="footer">
         <p>Gmail OTP AutoFill v1.0.0</p>
-        <p>保护您的隐私，提升使用体验</p>
+        <p>Protecting your privacy, enhancing experience</p>
     </div>
 
-    <script src="popup.js"></script>
+    <script type="module" src="popup.js"></script>
 </body>
 </html>

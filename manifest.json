@@ -2,7 +2,7 @@
   "manifest_version": 3,
   "name": "Gmail OTP AutoFill",
   "version": "1.0.0",
-  "description": "智能识别 Gmail 中的一次性验证码并自动填充到目标网页",
+  "description": "Intelligently identify one-time passwords in Gmail and auto-fill them into web pages",
   
   "permissions": [
     "activeTab",

@@ -1,23 +1,24 @@
 /**
- * Gmail API 服务
- * 处理 Gmail API 认证和邮件获取
+ * Gmail API Service
+ * Handles Gmail API authentication and email fetching
  */
+
+import { CONFIG } from '../config/constants.js';
 
 export class GmailService {
   constructor(accessToken) {
     this.accessToken = accessToken;
-    this.baseURL = 'https://gmail.googleapis.com/gmail/v1';
   }
 
   /**
-   * 获取最新邮件列表
-   * @param {number} limit - 邮件数量限制
-   * @returns {Promise<Array>} 邮件列表
+   * Get latest emails
+   * @param {number} limit - Number of emails to fetch
+   * @returns {Promise<Array>} List of emails
    */
-  async getLatestEmails(limit = 10) {
+  async getLatestEmails(limit = CONFIG.API.GMAIL.DEFAULT_LIMIT) {
     try {
       const listResponse = await fetch(
-        `${this.baseURL}/users/me/messages?maxResults=${limit}`,
+        `${CONFIG.API.GMAIL.BASE_URL}/users/me/messages?maxResults=${limit}`,
         {
           headers: {
             'Authorization': `Bearer ${this.accessToken}`,
@@ -50,11 +51,11 @@ export class GmailService {
   }
 
   /**
-   * 获取邮件详情
+   * Get message details
    */
   async getMessageDetails(messageId) {
     const response = await fetch(
-      `${this.baseURL}/users/me/messages/${messageId}`,
+      `${CONFIG.API.GMAIL.BASE_URL}/users/me/messages/${messageId}`,
       {
         headers: {
           'Authorization': `Bearer ${this.accessToken}`,
@@ -72,7 +73,7 @@ export class GmailService {
   }
 
   /**
-   * 解析邮件数据
+   * Parse email data
    */
   parseEmailData(data) {
     const headers = data.payload.headers;
@@ -91,7 +92,7 @@ export class GmailService {
   }
 
   /**
-   * 提取邮件正文
+   * Extract email body from payload
    */
   extractEmailBody(payload) {
     if (payload.body && payload.body.data) {
@@ -113,10 +114,9 @@ export class GmailService {
   }
 
   /**
-   * Base64 解码
+   * Decode Base64 email content
    */
   decodeBase64(data) {
     return atob(data.replace(/-/g, '+').replace(/_/g, '/'));
   }
 }
-

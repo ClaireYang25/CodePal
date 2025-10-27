@@ -1,7 +1,43 @@
 /**
  * Gmail OTP AutoFill - Popup Controller
- * 管理扩展弹窗的交互和状态
+ * Manages extension popup interactions and state
  */
+
+import { CONFIG } from '../config/constants.js';
+
+// UI Text Constants
+const UI_TEXT = {
+  STATUS: {
+    CONNECTED: 'Connected',
+    DISCONNECTED: 'Disconnected',
+    CONFIGURED: 'Configured',
+    NOT_CONFIGURED: 'Not Configured',
+    NONE: 'None',
+    CHECKING: 'Checking...'
+  },
+  BUTTONS: {
+    CONNECT_GMAIL: 'Connect Gmail',
+    CONNECTING: 'Connecting...',
+    TEST_NANO: 'Test Gemini Nano',
+    TESTING: 'Testing...',
+    TEST_API: 'Test Gemini API'
+  },
+  MESSAGES: {
+    GMAIL_SUCCESS: 'Gmail connected successfully!',
+    GMAIL_ERROR: 'Connection failed',
+    NANO_SUCCESS: 'Gemini Nano test successful!',
+    NANO_ERROR: 'Gemini Nano test failed',
+    API_SUCCESS: 'Gemini API test successful!',
+    API_ERROR: 'Gemini API test failed',
+    TEST_ERROR: 'Test error',
+    DATA_CLEARED: 'Data cleared',
+    CLEAR_FAILED: 'Clear failed',
+    KEY_SAVED: 'API key saved',
+    KEY_SAVE_FAILED: 'Save failed',
+    ENTER_KEY: 'Please enter API key',
+    CONFIRM_CLEAR: 'Are you sure you want to clear all data?'
+  }
+};
 
 class PopupController {
   constructor() {
@@ -27,9 +63,9 @@ class PopupController {
 
   async loadSettings() {
     return new Promise((resolve) => {
-      chrome.storage.local.get(['popupSettings'], (result) => {
-        if (result.popupSettings) {
-          this.settings = { ...this.settings, ...result.popupSettings };
+      chrome.storage.local.get([CONFIG.STORAGE_KEYS.POPUP_SETTINGS], (result) => {
+        if (result[CONFIG.STORAGE_KEYS.POPUP_SETTINGS]) {
+          this.settings = { ...this.settings, ...result[CONFIG.STORAGE_KEYS.POPUP_SETTINGS] };
         }
         resolve();
       });
@@ -38,7 +74,9 @@ class PopupController {
 
   async saveSettings() {
     return new Promise((resolve) => {
-      chrome.storage.local.set({ popupSettings: this.settings }, resolve);
+      chrome.storage.local.set({ 
+        [CONFIG.STORAGE_KEYS.POPUP_SETTINGS]: this.settings 
+      }, resolve);
     });
   }
 
@@ -59,11 +97,11 @@ class PopupController {
 
   async checkGmailStatus() {
     return new Promise((resolve) => {
-      chrome.runtime.sendMessage({ action: 'checkAuthStatus' }, (response) => {
+      chrome.runtime.sendMessage({ action: CONFIG.ACTIONS.CHECK_AUTH_STATUS }, (response) => {
         if (response && response.authenticated) {
-          resolve({ text: '已连接', class: 'connected' });
+          resolve({ text: UI_TEXT.STATUS.CONNECTED, class: 'connected' });
         } else {
-          resolve({ text: '未连接', class: 'disconnected' });
+          resolve({ text: UI_TEXT.STATUS.DISCONNECTED, class: 'disconnected' });
         }
       });
     });
@@ -71,11 +109,11 @@ class PopupController {
 
   async checkAIStatus() {
     return new Promise((resolve) => {
-      chrome.storage.local.get(['geminiApiKey'], (result) => {
-        if (result.geminiApiKey) {
-          resolve({ text: '已配置', class: 'connected' });
+      chrome.storage.local.get([CONFIG.STORAGE_KEYS.GEMINI_API_KEY], (result) => {
+        if (result[CONFIG.STORAGE_KEYS.GEMINI_API_KEY]) {
+          resolve({ text: UI_TEXT.STATUS.CONFIGURED, class: 'connected' });
         } else {
-          resolve({ text: '未配置', class: 'disconnected' });
+          resolve({ text: UI_TEXT.STATUS.NOT_CONFIGURED, class: 'disconnected' });
         }
       });
     });
@@ -83,18 +121,22 @@ class PopupController {
 
   async getLatestOTP() {
     return new Promise((resolve) => {
-      chrome.storage.local.get(['latestOTP'], (result) => {
-        if (result.latestOTP && this.isRecentOTP(result.latestOTP.timestamp)) {
-          resolve({ text: result.latestOTP.otp, class: 'connected' });
+      chrome.storage.local.get([CONFIG.STORAGE_KEYS.LATEST_OTP], (result) => {
+        if (result[CONFIG.STORAGE_KEYS.LATEST_OTP] && 
+            this.isRecentOTP(result[CONFIG.STORAGE_KEYS.LATEST_OTP].timestamp)) {
+          resolve({ 
+            text: result[CONFIG.STORAGE_KEYS.LATEST_OTP].otp, 
+            class: 'connected' 
+          });
         } else {
-          resolve({ text: '无', class: 'disconnected' });
+          resolve({ text: UI_TEXT.STATUS.NONE, class: 'disconnected' });
         }
       });
     });
   }
 
   isRecentOTP(timestamp) {
-    return (Date.now() - timestamp) < 5 * 60 * 1000;
+    return (Date.now() - timestamp) < CONFIG.OTP.EXPIRY_TIME;
   }
 
   updateStatusElement(elementId, text, className) {
@@ -146,75 +188,75 @@ class PopupController {
   async connectGmail() {
     const button = document.getElementById('connect-gmail');
     button.classList.add('loading');
-    button.textContent = '连接中...';
+    button.textContent = UI_TEXT.BUTTONS.CONNECTING;
 
     try {
-      const response = await this.sendMessage({ action: 'authenticate' });
+      const response = await this.sendMessage({ action: CONFIG.ACTIONS.AUTHENTICATE });
       
       if (response.success) {
-        this.showMessage('Gmail 连接成功！', 'success');
+        this.showMessage(UI_TEXT.MESSAGES.GMAIL_SUCCESS, 'success');
         await this.updateStatus();
       } else {
-        this.showMessage(`连接失败: ${response.error}`, 'error');
+        this.showMessage(`${UI_TEXT.MESSAGES.GMAIL_ERROR}: ${response.error}`, 'error');
       }
     } catch (error) {
-      this.showMessage(`连接错误: ${error.message}`, 'error');
+      this.showMessage(`${UI_TEXT.MESSAGES.GMAIL_ERROR}: ${error.message}`, 'error');
     } finally {
       button.classList.remove('loading');
-      button.textContent = '连接 Gmail';
+      button.textContent = UI_TEXT.BUTTONS.CONNECT_GMAIL;
     }
   }
 
   async testGeminiNano() {
     const button = document.getElementById('test-chrome-prompt-api');
     button.classList.add('loading');
-    button.textContent = '测试中...';
+    button.textContent = UI_TEXT.BUTTONS.TESTING;
 
     try {
-      const response = await this.sendMessage({ action: 'testGeminiNano' });
+      const response = await this.sendMessage({ action: CONFIG.ACTIONS.TEST_GEMINI_NANO });
       
       if (response.success) {
-        this.showMessage('Gemini Nano 测试成功！', 'success');
+        this.showMessage(UI_TEXT.MESSAGES.NANO_SUCCESS, 'success');
       } else {
-        this.showMessage(`Gemini Nano 测试失败: ${response.error}`, 'error');
+        this.showMessage(`${UI_TEXT.MESSAGES.NANO_ERROR}: ${response.error}`, 'error');
       }
     } catch (error) {
-      this.showMessage(`测试错误: ${error.message}`, 'error');
+      this.showMessage(`${UI_TEXT.MESSAGES.TEST_ERROR}: ${error.message}`, 'error');
     } finally {
       button.classList.remove('loading');
-      button.textContent = '测试 Chrome Prompt API';
+      button.textContent = UI_TEXT.BUTTONS.TEST_NANO;
     }
   }
 
   async testGeminiAPI() {
     const button = document.getElementById('test-gemini-api');
     button.classList.add('loading');
-    button.textContent = '测试中...';
+    button.textContent = UI_TEXT.BUTTONS.TESTING;
 
     try {
-      const response = await this.sendMessage({ action: 'testGeminiAPI' });
+      const response = await this.sendMessage({ action: CONFIG.ACTIONS.TEST_GEMINI_API });
       
       if (response.success) {
-        this.showMessage('Gemini API 测试成功！', 'success');
+        this.showMessage(UI_TEXT.MESSAGES.API_SUCCESS, 'success');
       } else {
-        this.showMessage(`Gemini API 测试失败: ${response.error}`, 'error');
+        this.showMessage(`${UI_TEXT.MESSAGES.API_ERROR}: ${response.error}`, 'error');
       }
     } catch (error) {
-      this.showMessage(`测试错误: ${error.message}`, 'error');
+      this.showMessage(`${UI_TEXT.MESSAGES.TEST_ERROR}: ${error.message}`, 'error');
     } finally {
       button.classList.remove('loading');
-      button.textContent = '测试 Gemini API';
+      button.textContent = UI_TEXT.BUTTONS.TEST_API;
     }
   }
 
   async clearData() {
-    if (confirm('确定要清除所有数据吗？')) {
+    if (confirm(UI_TEXT.MESSAGES.CONFIRM_CLEAR)) {
       try {
         await chrome.storage.local.clear();
-        this.showMessage('数据已清除', 'success');
+        this.showMessage(UI_TEXT.MESSAGES.DATA_CLEARED, 'success');
         await this.updateStatus();
       } catch (error) {
-        this.showMessage(`清除失败: ${error.message}`, 'error');
+        this.showMessage(`${UI_TEXT.MESSAGES.CLEAR_FAILED}: ${error.message}`, 'error');
       }
     }
   }
@@ -223,17 +265,19 @@ class PopupController {
     const apiKey = document.getElementById('api-key-input').value.trim();
     
     if (!apiKey) {
-      this.showMessage('请输入 API 密钥', 'error');
+      this.showMessage(UI_TEXT.MESSAGES.ENTER_KEY, 'error');
       return;
     }
 
     try {
-      await chrome.storage.local.set({ geminiApiKey: apiKey });
-      this.showMessage('API 密钥已保存', 'success');
+      await chrome.storage.local.set({ 
+        [CONFIG.STORAGE_KEYS.GEMINI_API_KEY]: apiKey 
+      });
+      this.showMessage(UI_TEXT.MESSAGES.KEY_SAVED, 'success');
       document.getElementById('api-key-input').value = '';
       await this.updateStatus();
     } catch (error) {
-      this.showMessage(`保存失败: ${error.message}`, 'error');
+      this.showMessage(`${UI_TEXT.MESSAGES.KEY_SAVE_FAILED}: ${error.message}`, 'error');
     }
   }
 
@@ -277,8 +321,7 @@ class PopupController {
   }
 }
 
-// 初始化
+// Initialize popup controller
 document.addEventListener('DOMContentLoaded', () => {
   new PopupController();
 });
-

@@ -1,7 +1,9 @@
 /**
  * Gmail OTP AutoFill - Content Script
- * 监听 Gmail 页面的邮件变化，提取并自动填充 OTP
+ * Monitors Gmail page for email changes, extracts and auto-fills OTP
  */
+
+import { CONFIG } from '../config/constants.js';
 
 class GmailMonitor {
   constructor() {
@@ -16,7 +18,7 @@ class GmailMonitor {
       this.setupAutoFillListeners();
       console.log('✅ Gmail monitor initialized');
       
-      // 处理当前可见邮件
+      // Process currently visible emails
       this.processCurrentEmails();
     } catch (error) {
       console.error('❌ Content script initialization failed:', error);
@@ -24,13 +26,13 @@ class GmailMonitor {
   }
 
   /**
-   * 等待 Gmail 页面加载完成
+   * Wait for Gmail page to load completely
    */
   async waitForGmailLoad() {
     return new Promise((resolve) => {
       const checkGmail = () => {
-        if (document.querySelector('[role="main"]') && 
-            document.querySelector('[data-thread-id]')) {
+        if (document.querySelector(CONFIG.GMAIL_SELECTORS.MAIN_CONTAINER) && 
+            document.querySelector(CONFIG.GMAIL_SELECTORS.THREAD)) {
           resolve();
         } else {
           setTimeout(checkGmail, 500);
@@ -41,13 +43,13 @@ class GmailMonitor {
   }
 
   /**
-   * 设置邮件监听器
+   * Setup email listeners
    */
   setupEmailListeners() {
-    const emailContainer = document.querySelector('[role="main"]');
+    const emailContainer = document.querySelector(CONFIG.GMAIL_SELECTORS.MAIN_CONTAINER);
     if (!emailContainer) return;
 
-    // 监听 DOM 变化
+    // Monitor DOM changes
     const observer = new MutationObserver((mutations) => {
       mutations.forEach((mutation) => {
         if (mutation.type === 'childList') {
@@ -61,28 +63,28 @@ class GmailMonitor {
       subtree: true
     });
 
-    // 监听邮件点击
+    // Monitor email clicks
     document.addEventListener('click', (event) => {
-      const emailElement = event.target.closest('[data-thread-id]');
+      const emailElement = event.target.closest(CONFIG.GMAIL_SELECTORS.THREAD);
       if (emailElement) {
-        setTimeout(() => this.processEmailElement(emailElement), 1000);
+        setTimeout(() => this.processEmailElement(emailElement), CONFIG.DELAYS.EMAIL_CLICK);
       }
     });
   }
 
   /**
-   * 设置自动填充监听器
+   * Setup auto-fill listeners
    */
   setupAutoFillListeners() {
-    // 监听来自后台的填充请求
+    // Listen for fill requests from background
     chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
-      if (request.action === 'fillOTP') {
+      if (request.action === CONFIG.ACTIONS.FILL_OTP) {
         this.fillOTPInCurrentPage(request.otp);
         sendResponse({ success: true });
       }
     });
 
-    // 监听输入框焦点事件
+    // Listen for input field focus events
     document.addEventListener('focusin', (event) => {
       if (this.isOTPInputField(event.target)) {
         this.handleOTPInputFocus(event.target);
@@ -91,20 +93,20 @@ class GmailMonitor {
   }
 
   /**
-   * 处理邮件列表变化
+   * Handle email list changes (debounced)
    */
   handleEmailListChange() {
     clearTimeout(this.emailChangeTimeout);
     this.emailChangeTimeout = setTimeout(() => {
       this.processCurrentEmails();
-    }, 1000);
+    }, CONFIG.DELAYS.EMAIL_CHANGE);
   }
 
   /**
-   * 处理当前所有邮件
+   * Process all current emails
    */
   async processCurrentEmails() {
-    const emailElements = document.querySelectorAll('[data-thread-id]');
+    const emailElements = document.querySelectorAll(CONFIG.GMAIL_SELECTORS.THREAD);
     
     for (const emailElement of emailElements) {
       const threadId = emailElement.getAttribute('data-thread-id');
@@ -117,7 +119,7 @@ class GmailMonitor {
   }
 
   /**
-   * 处理单个邮件元素
+   * Process a single email element
    */
   async processEmailElement(emailElement) {
     try {
@@ -137,15 +139,12 @@ class GmailMonitor {
   }
 
   /**
-   * 提取邮件内容
+   * Extract email content from element
    */
   extractEmailContent(emailElement) {
-    const selectors = [
-      '.y2',              // Gmail 邮件预览
-      '.yP',              // 邮件正文
-      '[data-message-id] .y2',
-      '.thread-snippet'
-    ];
+    const selectors = Object.values(CONFIG.GMAIL_SELECTORS).filter(s => 
+      s !== CONFIG.GMAIL_SELECTORS.MAIN_CONTAINER && s !== CONFIG.GMAIL_SELECTORS.THREAD
+    );
 
     for (const selector of selectors) {
       const element = emailElement.querySelector(selector);
@@ -158,29 +157,29 @@ class GmailMonitor {
   }
 
   /**
-   * 检测语言
+   * Detect language from text
    */
   detectLanguage(text) {
     const patterns = {
-      zh: /[\u4e00-\u9fff]/,
-      es: /[ñáéíóúü]/i,
-      it: /[àèéìíîòóù]/i
+      [CONFIG.LANGUAGES.CHINESE]: /[\u4e00-\u9fff]/,
+      [CONFIG.LANGUAGES.SPANISH]: /[ñáéíóúü]/i,
+      [CONFIG.LANGUAGES.ITALIAN]: /[àèéìíîòóù]/i
     };
 
     for (const [lang, pattern] of Object.entries(patterns)) {
       if (pattern.test(text)) return lang;
     }
     
-    return 'en';
+    return CONFIG.LANGUAGES.ENGLISH;
   }
 
   /**
-   * 提取 OTP (通过后台脚本)
+   * Extract OTP (via background script)
    */
   async extractOTP(content, language) {
     return new Promise((resolve) => {
       chrome.runtime.sendMessage({
-        action: 'extractOTP',
+        action: CONFIG.ACTIONS.EXTRACT_OTP,
         emailContent: content,
         language: language
       }, (response) => {
@@ -195,32 +194,32 @@ class GmailMonitor {
   }
 
   /**
-   * 存储 OTP
+   * Store OTP in local storage
    */
   async storeOTP(otp, context) {
     const otpData = {
       otp: otp,
       timestamp: Date.now(),
-      context: context.substring(0, 200),
+      context: context.substring(0, CONFIG.OTP.CONTEXT_LENGTH),
       source: 'gmail'
     };
 
     return new Promise((resolve) => {
       chrome.storage.local.set({ 
-        latestOTP: otpData,
+        [CONFIG.STORAGE_KEYS.LATEST_OTP]: otpData,
         [`otp_${Date.now()}`]: otpData 
       }, resolve);
     });
   }
 
   /**
-   * 显示 OTP 通知
+   * Show OTP notification with modern UI
    */
   showOTPNotification(otp) {
     const notification = document.createElement('div');
     notification.innerHTML = `
       <div style="display: flex; align-items: center; gap: 10px;">
-        <strong>验证码已识别:</strong> 
+        <strong>OTP Identified:</strong> 
         <span style="font-size: 18px; font-weight: bold;">${otp}</span>
         <button class="copy-otp" data-otp="${otp}" style="
           padding: 5px 10px;
@@ -229,14 +228,14 @@ class GmailMonitor {
           border-radius: 4px;
           cursor: pointer;
           color: #4CAF50;
-        ">复制</button>
+        ">Copy</button>
       </div>
     `;
 
     notification.style.cssText = `
       position: fixed;
-      top: 20px;
-      right: 20px;
+      top: ${CONFIG.UI.NOTIFICATION.POSITION.top};
+      right: ${CONFIG.UI.NOTIFICATION.POSITION.right};
       background: linear-gradient(135deg, #4CAF50, #45a049);
       color: white;
       padding: 15px 20px;
@@ -248,7 +247,7 @@ class GmailMonitor {
       animation: slideIn 0.3s ease-out;
     `;
 
-    // 添加动画样式
+    // Add animation styles if not already present
     if (!document.querySelector('#otp-notification-styles')) {
       const style = document.createElement('style');
       style.id = 'otp-notification-styles';
@@ -261,32 +260,27 @@ class GmailMonitor {
       document.head.appendChild(style);
     }
 
-    // 复制功能
+    // Copy functionality
     notification.querySelector('.copy-otp').addEventListener('click', (e) => {
       navigator.clipboard.writeText(e.target.dataset.otp);
-      e.target.textContent = '✓ 已复制';
-      setTimeout(() => e.target.textContent = '复制', 2000);
+      e.target.textContent = '✓ Copied';
+      setTimeout(() => e.target.textContent = 'Copy', 2000);
     });
 
     document.body.appendChild(notification);
 
-    // 3秒后自动移除
+    // Auto-remove after duration
     setTimeout(() => {
       notification.style.animation = 'slideOut 0.3s ease-in forwards';
       setTimeout(() => notification.remove(), 300);
-    }, 3000);
+    }, CONFIG.UI.NOTIFICATION.DURATION);
   }
 
   /**
-   * 判断是否为 OTP 输入框
+   * Check if element is an OTP input field
    */
   isOTPInputField(element) {
     if (!element || element.tagName !== 'INPUT') return false;
-    
-    const keywords = [
-      'otp', 'verification', 'code', 'token', 'pin',
-      '验证码', '验证', '代码'
-    ];
     
     const attributes = [
       element.name?.toLowerCase(),
@@ -295,13 +289,13 @@ class GmailMonitor {
       element.className?.toLowerCase()
     ].filter(Boolean);
 
-    return keywords.some(keyword => 
+    return CONFIG.OTP_KEYWORDS.some(keyword => 
       attributes.some(attr => attr.includes(keyword))
     );
   }
 
   /**
-   * 处理 OTP 输入框焦点
+   * Handle OTP input field focus
    */
   async handleOTPInputFocus(inputElement) {
     const latestOTP = await this.getLatestOTP();
@@ -314,25 +308,25 @@ class GmailMonitor {
   }
 
   /**
-   * 获取最新 OTP
+   * Get latest OTP from storage
    */
   async getLatestOTP() {
     return new Promise((resolve) => {
-      chrome.storage.local.get(['latestOTP'], (result) => {
-        resolve(result.latestOTP);
+      chrome.storage.local.get([CONFIG.STORAGE_KEYS.LATEST_OTP], (result) => {
+        resolve(result[CONFIG.STORAGE_KEYS.LATEST_OTP]);
       });
     });
   }
 
   /**
-   * 检查 OTP 是否在有效期内（5分钟）
+   * Check if OTP is within expiry time
    */
   isRecentOTP(timestamp) {
-    return (Date.now() - timestamp) < 5 * 60 * 1000;
+    return (Date.now() - timestamp) < CONFIG.OTP.EXPIRY_TIME;
   }
 
   /**
-   * 在当前页面填充 OTP
+   * Fill OTP in current page
    */
   fillOTPInCurrentPage(otp) {
     const otpInputs = document.querySelectorAll('input');
@@ -348,6 +342,5 @@ class GmailMonitor {
   }
 }
 
-// 初始化 Gmail 监听器
+// Initialize Gmail monitor
 new GmailMonitor();
-

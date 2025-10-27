@@ -1,13 +1,15 @@
 /**
  * Gmail OTP AutoFill - Offscreen Document
- * 在窗口上下文中运行 Gemini Nano
+ * Runs Gemini Nano in a window context
  */
+
+import { CONFIG, buildOTPPrompt } from '../config/constants.js';
 
 let session = null;
 let isInitialized = false;
 
 /**
- * 初始化 Gemini Nano
+ * Initialize Gemini Nano
  */
 async function initializeNano() {
   try {
@@ -29,7 +31,7 @@ async function initializeNano() {
       console.log('⏬ Gemini Nano needs to be downloaded...');
     }
 
-    // 创建会话
+    // Create session
     session = await globalThis.LanguageModel.create({
       monitor(m) {
         m.addEventListener('downloadprogress', (e) => {
@@ -48,20 +50,20 @@ async function initializeNano() {
 }
 
 /**
- * 监听来自 Service Worker 的消息
+ * Listen for messages from Service Worker
  */
 chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
   handleRequest(request, sendResponse);
-  return true; // 保持消息通道开放
+  return true; // Keep message channel open
 });
 
 /**
- * 处理请求
+ * Handle incoming requests
  */
 async function handleRequest(request, sendResponse) {
   const handlers = {
-    'offscreen-extractOTP': handleExtractOTP,
-    'offscreen-testConnection': handleTestConnection
+    [CONFIG.ACTIONS.OFFSCREEN_EXTRACT_OTP]: handleExtractOTP,
+    [CONFIG.ACTIONS.OFFSCREEN_TEST_CONNECTION]: handleTestConnection
   };
 
   const handler = handlers[request.action];
@@ -73,11 +75,11 @@ async function handleRequest(request, sendResponse) {
 }
 
 /**
- * 提取 OTP
+ * Extract OTP using Gemini Nano
  */
 async function handleExtractOTP(request, sendResponse) {
   try {
-    // 确保已初始化
+    // Ensure initialization
     if (!isInitialized) {
       const success = await initializeNano();
       if (!success) {
@@ -94,7 +96,7 @@ async function handleExtractOTP(request, sendResponse) {
       return;
     }
 
-    const prompt = buildPrompt(request.emailContent, request.language);
+    const prompt = buildOTPPrompt(request.emailContent, request.language);
     const result = await session.prompt(prompt);
     const parsed = parseResponse(result);
     
@@ -106,7 +108,7 @@ async function handleExtractOTP(request, sendResponse) {
 }
 
 /**
- * 测试连接
+ * Test Gemini Nano connection
  */
 async function handleTestConnection(request, sendResponse) {
   try {
@@ -123,7 +125,7 @@ async function handleTestConnection(request, sendResponse) {
       return;
     }
 
-    const result = await session.prompt('请回复"连接成功"');
+    const result = await session.prompt(CONFIG.PROMPTS.TEST_CONNECTION);
     sendResponse({
       success: true,
       message: 'Gemini Nano connected',
@@ -136,43 +138,7 @@ async function handleTestConnection(request, sendResponse) {
 }
 
 /**
- * 构建提示词
- */
-function buildPrompt(emailContent, language) {
-  const instructions = {
-    zh: '这是中文邮件，识别"验证码"相关词汇。',
-    en: 'This is English email, identify "verification code", "OTP", "PIN".',
-    es: 'Correo español, identifica "código de verificación".',
-    it: 'Email italiano, identifica "codice di verifica".',
-    auto: '自动检测语言并识别验证码。'
-  };
-
-  return `你是验证码提取助手。从邮件中提取一次性验证码(OTP)。
-
-${instructions[language] || instructions.auto}
-
-邮件内容：
-"""
-${emailContent}
-"""
-
-返回JSON格式：
-{
-  "otp": "验证码（4-8位数字）",
-  "confidence": 0.95,
-  "reasoning": "提取理由"
-}
-
-规则：
-1. 只提取4-8位数字
-2. 找不到时otp设为null
-3. 直接返回JSON，不要其他内容
-
-JSON:`;
-}
-
-/**
- * 解析响应
+ * Parse Gemini Nano response
  */
 function parseResponse(response) {
   try {
@@ -199,4 +165,3 @@ function parseResponse(response) {
 }
 
 console.log('✅ Offscreen document loaded, waiting for requests...');
-

@@ -1,11 +1,12 @@
 /**
  * Gmail OTP AutoFill - Service Worker
- * 后台服务，处理认证、消息路由和 AI 调用
+ * Background service handling authentication, message routing, and AI calls
  */
 
 import { AIService } from '../services/ai-service.js';
 import { GmailService } from '../services/gmail-service.js';
 import { OTPEngine } from '../core/otp-engine.js';
+import { CONFIG } from '../config/constants.js';
 
 class BackgroundService {
   constructor() {
@@ -27,7 +28,7 @@ class BackgroundService {
   }
 
   /**
-   * 检查 Gmail 认证状态
+   * Check Gmail authentication status
    */
   async checkAuthentication() {
     const token = await this.getStoredToken();
@@ -38,27 +39,27 @@ class BackgroundService {
   }
 
   /**
-   * 设置消息监听器
+   * Setup message listeners
    */
   setupMessageListeners() {
     chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
       this.handleMessage(request, sender, sendResponse);
-      return true; // 保持消息通道开放
+      return true; // Keep message channel open
     });
   }
 
   /**
-   * 处理消息路由
+   * Handle message routing
    */
   async handleMessage(request, sender, sendResponse) {
     try {
       const handlers = {
-        'authenticate': () => this.handleAuthentication(sendResponse),
-        'getLatestEmails': () => this.handleGetLatestEmails(request, sendResponse),
-        'extractOTP': () => this.handleExtractOTP(request, sendResponse),
-        'checkAuthStatus': () => sendResponse({ authenticated: this.isAuthenticated }),
-        'testGeminiNano': () => this.handleTestGeminiNano(sendResponse),
-        'testGeminiAPI': () => this.handleTestGeminiAPI(sendResponse)
+        [CONFIG.ACTIONS.AUTHENTICATE]: () => this.handleAuthentication(sendResponse),
+        [CONFIG.ACTIONS.GET_LATEST_EMAILS]: () => this.handleGetLatestEmails(request, sendResponse),
+        [CONFIG.ACTIONS.EXTRACT_OTP]: () => this.handleExtractOTP(request, sendResponse),
+        [CONFIG.ACTIONS.CHECK_AUTH_STATUS]: () => sendResponse({ authenticated: this.isAuthenticated }),
+        [CONFIG.ACTIONS.TEST_GEMINI_NANO]: () => this.handleTestGeminiNano(sendResponse),
+        [CONFIG.ACTIONS.TEST_GEMINI_API]: () => this.handleTestGeminiAPI(sendResponse)
       };
 
       const handler = handlers[request.action];
@@ -74,7 +75,7 @@ class BackgroundService {
   }
 
   /**
-   * 处理 Gmail 认证
+   * Handle Gmail authentication
    */
   async handleAuthentication(sendResponse) {
     try {
@@ -90,7 +91,7 @@ class BackgroundService {
   }
 
   /**
-   * Google OAuth 认证
+   * Google OAuth authentication
    */
   async authenticateWithGoogle() {
     return new Promise((resolve, reject) => {
@@ -107,7 +108,7 @@ class BackgroundService {
   }
 
   /**
-   * 获取最新邮件
+   * Get latest emails
    */
   async handleGetLatestEmails(request, sendResponse) {
     if (!this.isAuthenticated) {
@@ -116,7 +117,8 @@ class BackgroundService {
     }
 
     try {
-      const emails = await this.gmailService.getLatestEmails(request.limit || 10);
+      const limit = request.limit || CONFIG.API.GMAIL.DEFAULT_LIMIT;
+      const emails = await this.gmailService.getLatestEmails(limit);
       sendResponse({ success: true, emails });
     } catch (error) {
       sendResponse({ error: error.message });
@@ -124,28 +126,28 @@ class BackgroundService {
   }
 
   /**
-   * 提取 OTP - 三层智能引擎
-   * 1️⃣ 本地正则匹配
+   * Extract OTP using three-tier intelligent engine:
+   * 1️⃣ Local regex matching
    * 2️⃣ Gemini Nano (Chrome Prompt API)
-   * 3️⃣ Gemini API (云端备用)
+   * 3️⃣ Gemini API (cloud fallback)
    */
   async handleExtractOTP(request, sendResponse) {
     try {
       const { emailContent, language } = request;
       
-      // 第一层：本地正则匹配
+      // Tier 1: Local regex matching
       const localResult = await this.otpEngine.extractOTP(emailContent, language);
       
-      if (localResult.success && localResult.confidence > 0.8) {
+      if (localResult.success && localResult.confidence > CONFIG.OTP.CONFIDENCE_THRESHOLD) {
         console.log('✅ OTP found via local regex');
         sendResponse(localResult);
         return;
       }
 
-      // 第二层：Gemini Nano (通过 offscreen 文档)
+      // Tier 2: Gemini Nano (via offscreen document)
       try {
         const nanoResult = await this.callOffscreenDocument({
-          action: 'offscreen-extractOTP',
+          action: CONFIG.ACTIONS.OFFSCREEN_EXTRACT_OTP,
           emailContent,
           language
         });
@@ -159,7 +161,7 @@ class BackgroundService {
         console.warn('⚠️ Gemini Nano failed, trying API fallback:', error.message);
       }
 
-      // 第三层：Gemini API (云端备用)
+      // Tier 3: Gemini API (cloud fallback)
       const apiResult = await this.aiService.extractOTP(emailContent, language);
       console.log('✅ OTP found via Gemini API');
       sendResponse(apiResult);
@@ -171,12 +173,12 @@ class BackgroundService {
   }
 
   /**
-   * 测试 Gemini Nano
+   * Test Gemini Nano
    */
   async handleTestGeminiNano(sendResponse) {
     try {
       const result = await this.callOffscreenDocument({ 
-        action: 'offscreen-testConnection' 
+        action: CONFIG.ACTIONS.OFFSCREEN_TEST_CONNECTION
       });
       sendResponse(result);
     } catch (error) {
@@ -185,7 +187,7 @@ class BackgroundService {
   }
 
   /**
-   * 测试 Gemini API
+   * Test Gemini API
    */
   async handleTestGeminiAPI(sendResponse) {
     try {
@@ -197,7 +199,7 @@ class BackgroundService {
   }
 
   /**
-   * 调用 Offscreen 文档
+   * Call offscreen document for Gemini Nano processing
    */
   async callOffscreenDocument(message) {
     try {
@@ -205,13 +207,13 @@ class BackgroundService {
       
       if (!hasDocument) {
         await chrome.offscreen.createDocument({
-          url: 'src/offscreen/offscreen.html',
+          url: CONFIG.OFFSCREEN.PATH,
           reasons: [chrome.offscreen.Reason.USER_MEDIA],
           justification: 'AI processing for OTP extraction using Gemini Nano.'
         });
         
-        // 等待文档初始化
-        await new Promise(resolve => setTimeout(resolve, 100));
+        // Wait for document initialization
+        await new Promise(resolve => setTimeout(resolve, CONFIG.OFFSCREEN.INIT_DELAY));
       }
 
       return await chrome.runtime.sendMessage(message);
@@ -222,23 +224,24 @@ class BackgroundService {
   }
 
   /**
-   * 存储和获取 token
+   * Store and retrieve authentication token
    */
   async storeToken(token) {
     return new Promise((resolve) => {
-      chrome.storage.local.set({ gmailToken: token }, resolve);
+      chrome.storage.local.set({ 
+        [CONFIG.STORAGE_KEYS.GMAIL_TOKEN]: token 
+      }, resolve);
     });
   }
 
   async getStoredToken() {
     return new Promise((resolve) => {
-      chrome.storage.local.get(['gmailToken'], (result) => {
-        resolve(result.gmailToken);
+      chrome.storage.local.get([CONFIG.STORAGE_KEYS.GMAIL_TOKEN], (result) => {
+        resolve(result[CONFIG.STORAGE_KEYS.GMAIL_TOKEN]);
       });
     });
   }
 }
 
-// 初始化后台服务
+// Initialize background service
 new BackgroundService();
-

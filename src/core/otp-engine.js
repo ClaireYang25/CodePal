@@ -1,20 +1,22 @@
 /**
- * Gmail OTP AutoFill - OTP 识别引擎
- * 多语言 OTP 识别规则和本地匹配系统
+ * Gmail OTP AutoFill - OTP Recognition Engine
+ * Multi-language OTP recognition rules and local matching system
  */
+
+import { CONFIG } from '../config/constants.js';
 
 export class OTPEngine {
   constructor() {
     this.rules = this.initializeRules();
-    this.confidenceThreshold = 0.8;
+    this.confidenceThreshold = CONFIG.OTP.CONFIDENCE_THRESHOLD;
   }
 
   /**
-   * 初始化多语言识别规则
+   * Initialize multi-language recognition rules
    */
   initializeRules() {
     return {
-      // 中文规则
+      // Chinese rules
       zh: {
         patterns: [
           /验证码[：:]\s*(\d{4,8})/i,
@@ -29,7 +31,7 @@ export class OTPEngine {
         contexts: ['登录', '注册', '安全验证', '身份验证']
       },
       
-      // 英文规则
+      // English rules
       en: {
         patterns: [
           /verification code[：:]\s*(\d{4,8})/i,
@@ -46,7 +48,7 @@ export class OTPEngine {
         contexts: ['login', 'signup', 'security', 'authentication']
       },
       
-      // 西班牙语规则
+      // Spanish rules
       es: {
         patterns: [
           /código de verificación[：:]\s*(\d{4,8})/i,
@@ -59,7 +61,7 @@ export class OTPEngine {
         contexts: ['inicio', 'registro', 'seguridad']
       },
       
-      // 意大利语规则
+      // Italian rules
       it: {
         patterns: [
           /codice di verifica[：:]\s*(\d{4,8})/i,
@@ -72,7 +74,7 @@ export class OTPEngine {
         contexts: ['accesso', 'registrazione', 'sicurezza']
       },
       
-      // 通用数字模式
+      // Universal number patterns
       universal: {
         patterns: [
           /(\d{6})/g,
@@ -86,32 +88,32 @@ export class OTPEngine {
   }
 
   /**
-   * 从邮件内容中提取 OTP
-   * @param {string} content - 邮件内容
-   * @param {string} language - 语言代码 ('auto', 'zh', 'en', 'es', 'it')
-   * @returns {Promise<Object>} 提取结果
+   * Extract OTP from email content
+   * @param {string} content - Email content
+   * @param {string} language - Language code ('auto', 'zh', 'en', 'es', 'it')
+   * @returns {Promise<Object>} Extraction result
    */
-  async extractOTP(content, language = 'auto') {
+  async extractOTP(content, language = CONFIG.LANGUAGES.AUTO) {
     try {
       const cleanContent = this.cleanContent(content);
-      const detectedLanguage = language === 'auto' ? 
+      const detectedLanguage = language === CONFIG.LANGUAGES.AUTO ? 
         this.detectLanguage(cleanContent) : language;
       
       const results = [];
       
-      // 1. 特定语言规则匹配
+      // 1. Try specific language rules
       if (this.rules[detectedLanguage]) {
         const result = this.matchWithRules(cleanContent, this.rules[detectedLanguage]);
         if (result) results.push({ ...result, language: detectedLanguage, priority: 1 });
       }
       
-      // 2. 英文规则作为备选
-      if (detectedLanguage !== 'en') {
-        const result = this.matchWithRules(cleanContent, this.rules.en);
-        if (result) results.push({ ...result, language: 'en', priority: 2 });
+      // 2. Try English rules as fallback
+      if (detectedLanguage !== CONFIG.LANGUAGES.ENGLISH) {
+        const result = this.matchWithRules(cleanContent, this.rules[CONFIG.LANGUAGES.ENGLISH]);
+        if (result) results.push({ ...result, language: CONFIG.LANGUAGES.ENGLISH, priority: 2 });
       }
       
-      // 3. 通用数字模式
+      // 3. Try universal number patterns
       const universalResult = this.matchWithRules(cleanContent, this.rules.universal);
       if (universalResult) results.push({ ...universalResult, language: 'universal', priority: 3 });
       
@@ -131,7 +133,7 @@ export class OTPEngine {
   }
 
   /**
-   * 清理邮件内容
+   * Clean email content
    */
   cleanContent(content) {
     return content
@@ -141,22 +143,24 @@ export class OTPEngine {
   }
 
   /**
-   * 检测语言
+   * Detect language from content
    */
   detectLanguage(content) {
-    const chineseRegex = /[\u4e00-\u9fff]/;
-    const spanishRegex = /[ñáéíóúü]/i;
-    const italianRegex = /[àèéìíîòóù]/i;
+    const patterns = {
+      [CONFIG.LANGUAGES.CHINESE]: /[\u4e00-\u9fff]/,
+      [CONFIG.LANGUAGES.SPANISH]: /[ñáéíóúü]/i,
+      [CONFIG.LANGUAGES.ITALIAN]: /[àèéìíîòóù]/i
+    };
 
-    if (chineseRegex.test(content)) return 'zh';
-    if (spanishRegex.test(content)) return 'es';
-    if (italianRegex.test(content)) return 'it';
+    for (const [lang, pattern] of Object.entries(patterns)) {
+      if (pattern.test(content)) return lang;
+    }
     
-    return 'en';
+    return CONFIG.LANGUAGES.ENGLISH;
   }
 
   /**
-   * 使用规则匹配
+   * Match content with rules
    */
   matchWithRules(content, rules) {
     let bestMatch = null;
@@ -179,33 +183,35 @@ export class OTPEngine {
   }
 
   /**
-   * 计算置信度
+   * Calculate confidence score
    */
   calculateConfidence(content, otp, rules) {
     let confidence = 0.5;
     
-    // 关键词匹配
+    // Keyword matching bonus
     const keywordMatches = rules.keywords.filter(keyword => 
       content.toLowerCase().includes(keyword.toLowerCase())
     ).length;
     confidence += keywordMatches * 0.1;
     
-    // 上下文匹配
+    // Context matching bonus
     const contextMatches = rules.contexts.filter(context => 
       content.toLowerCase().includes(context.toLowerCase())
     ).length;
     confidence += contextMatches * 0.15;
     
-    // OTP 长度评分
+    // OTP length scoring
     if (otp.length === 6) confidence += 0.2;
     else if (otp.length === 4) confidence += 0.15;
-    else if (otp.length >= 4 && otp.length <= 8) confidence += 0.1;
+    else if (otp.length >= CONFIG.OTP.MIN_LENGTH && otp.length <= CONFIG.OTP.MAX_LENGTH) {
+      confidence += 0.1;
+    }
     
     return Math.min(confidence, 1.0);
   }
 
   /**
-   * 选择最佳结果
+   * Select best result from multiple matches
    */
   selectBestResult(results) {
     if (results.length === 0) return null;
@@ -219,13 +225,12 @@ export class OTPEngine {
   }
 
   /**
-   * 验证 OTP 格式
+   * Validate OTP format
    */
   isValidOTP(otp) {
     if (!otp || typeof otp !== 'string') return false;
     if (!/^\d+$/.test(otp)) return false;
-    if (otp.length < 4 || otp.length > 8) return false;
+    if (otp.length < CONFIG.OTP.MIN_LENGTH || otp.length > CONFIG.OTP.MAX_LENGTH) return false;
     return true;
   }
 }
-

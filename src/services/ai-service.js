@@ -1,15 +1,13 @@
 /**
- * AI 服务 - Gemini API
- * 作为 Gemini Nano 的备用方案
+ * AI Service - Gemini API
+ * Cloud-based AI service as fallback for Gemini Nano
  */
+
+import { CONFIG, buildOTPPrompt } from '../config/constants.js';
 
 export class AIService {
   constructor() {
     this.apiKey = null;
-    this.baseURL = 'https://generativelanguage.googleapis.com/v1beta';
-    this.model = 'gemini-1.5-flash';
-    this.maxRetries = 3;
-    this.retryDelay = 1000;
     this.init();
   }
 
@@ -26,8 +24,8 @@ export class AIService {
 
   async getAPIKey() {
     return new Promise((resolve) => {
-      chrome.storage.local.get(['geminiApiKey'], (result) => {
-        resolve(result.geminiApiKey);
+      chrome.storage.local.get([CONFIG.STORAGE_KEYS.GEMINI_API_KEY], (result) => {
+        resolve(result[CONFIG.STORAGE_KEYS.GEMINI_API_KEY]);
       });
     });
   }
@@ -35,77 +33,45 @@ export class AIService {
   async setAPIKey(apiKey) {
     this.apiKey = apiKey;
     return new Promise((resolve) => {
-      chrome.storage.local.set({ geminiApiKey: apiKey }, resolve);
+      chrome.storage.local.set({ 
+        [CONFIG.STORAGE_KEYS.GEMINI_API_KEY]: apiKey 
+      }, resolve);
     });
   }
 
   /**
-   * 使用 Gemini API 提取 OTP
-   * @param {string} emailContent - 邮件内容
-   * @param {string} language - 语言代码
-   * @returns {Promise<Object>} 提取结果
+   * Extract OTP using Gemini API
+   * @param {string} emailContent - Email content
+   * @param {string} language - Language code
+   * @returns {Promise<Object>} Extraction result
    */
-  async extractOTP(emailContent, language = 'auto') {
+  async extractOTP(emailContent, language = CONFIG.LANGUAGES.AUTO) {
     if (!this.apiKey) {
       throw new Error('Gemini API key not configured.');
     }
 
-    const prompt = this.buildPrompt(emailContent, language);
+    const prompt = buildOTPPrompt(emailContent, language);
     const response = await this.callAPI(prompt);
     return this.parseResponse(response);
   }
 
   /**
-   * 构建提示词
-   */
-  buildPrompt(emailContent, language) {
-    const instructions = {
-      zh: '这是中文邮件，识别"验证码"相关词汇。',
-      en: 'This is English email, identify "verification code", "OTP", "PIN".',
-      es: 'Correo español, identifica "código de verificación".',
-      it: 'Email italiano, identifica "codice di verifica".',
-      auto: '自动检测语言并识别验证码。'
-    };
-
-    return `你是验证码提取助手。从邮件中提取一次性验证码(OTP)。
-
-${instructions[language] || instructions.auto}
-
-邮件内容：
-"""
-${emailContent}
-"""
-
-返回JSON格式：
-{
-  "otp": "验证码（4-8位数字）",
-  "confidence": 0.95,
-  "reasoning": "提取理由"
-}
-
-规则：
-1. 只提取4-8位数字
-2. 找不到时otp设为null
-3. 直接返回JSON，不要其他内容`;
-  }
-
-  /**
-   * 调用 Gemini API
+   * Call Gemini API with retry mechanism
    */
   async callAPI(prompt) {
-    const url = `${this.baseURL}/models/${this.model}:generateContent?key=${this.apiKey}`;
+    const url = `${CONFIG.API.GEMINI.BASE_URL}/models/${CONFIG.API.GEMINI.MODEL}:generateContent?key=${this.apiKey}`;
     
     const requestBody = {
       contents: [{ parts: [{ text: prompt }] }],
       generationConfig: {
-        temperature: 0.1,
-        topK: 1,
-        topP: 0.8,
-        maxOutputTokens: 500
+        temperature: CONFIG.API.GEMINI.TEMPERATURE,
+        topK: CONFIG.API.GEMINI.TOP_K,
+        topP: CONFIG.API.GEMINI.TOP_P,
+        maxOutputTokens: CONFIG.API.GEMINI.MAX_OUTPUT_TOKENS
       }
     };
 
-    for (let attempt = 1; attempt <= this.maxRetries; attempt++) {
+    for (let attempt = 1; attempt <= CONFIG.API.GEMINI.MAX_RETRIES; attempt++) {
       try {
         const response = await fetch(url, {
           method: 'POST',
@@ -114,8 +80,9 @@ ${emailContent}
         });
 
         if (!response.ok) {
-          if (response.status === 429 && attempt < this.maxRetries) {
-            await this.delay(this.retryDelay * attempt);
+          if (response.status === 429 && attempt < CONFIG.API.GEMINI.MAX_RETRIES) {
+            // Rate limit, wait and retry
+            await this.delay(CONFIG.API.GEMINI.RETRY_DELAY * attempt);
             continue;
           }
           throw new Error(`API request failed: ${response.status}`);
@@ -128,14 +95,14 @@ ${emailContent}
 
         return data;
       } catch (error) {
-        if (attempt === this.maxRetries) throw error;
-        await this.delay(this.retryDelay * attempt);
+        if (attempt === CONFIG.API.GEMINI.MAX_RETRIES) throw error;
+        await this.delay(CONFIG.API.GEMINI.RETRY_DELAY * attempt);
       }
     }
   }
 
   /**
-   * 解析 API 响应
+   * Parse API response
    */
   parseResponse(apiResponse) {
     try {
@@ -164,7 +131,7 @@ ${emailContent}
   }
 
   /**
-   * 测试 API 连接
+   * Test API connection
    */
   async testConnection() {
     if (!this.apiKey) {
@@ -172,14 +139,14 @@ ${emailContent}
     }
     
     try {
-      const response = await this.callAPI('请回复"连接成功"');
+      const response = await this.callAPI(CONFIG.PROMPTS.TEST_CONNECTION);
       const text = response.candidates?.[0]?.content?.parts?.[0]?.text;
       
-      if (text && text.includes('连接成功')) {
+      if (text && text.toLowerCase().includes('success')) {
         return { 
           success: true, 
           message: 'Gemini API connected',
-          model: this.model
+          model: CONFIG.API.GEMINI.MODEL
         };
       }
       
@@ -196,4 +163,3 @@ ${emailContent}
     return new Promise(resolve => setTimeout(resolve, ms));
   }
 }
-
