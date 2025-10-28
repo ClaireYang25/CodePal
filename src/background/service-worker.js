@@ -188,20 +188,23 @@ class BackgroundService {
    */
   async requestAutofill(otp) {
     try {
-      const [tab] = await chrome.tabs.query({
-        active: true,
-        url: "*://mail.google.com/*"
-      });
-
-      if (tab) {
-        await chrome.tabs.sendMessage(tab.id, {
-          action: CONFIG.ACTIONS.FILL_OTP,
-          otp: otp
-        });
-        console.log(`📬 Sent autofill request for OTP: ${otp} to tab ${tab.id}`);
+      const tabs = await chrome.tabs.query({ url: "*://mail.google.com/*" });
+      for (const tab of tabs) {
+        try {
+          await chrome.tabs.sendMessage(tab.id, {
+            action: CONFIG.ACTIONS.FILL_OTP,
+            otp
+          });
+          console.log(`📬 Sent autofill request to tab ${tab.id}`);
+        } catch (err) {
+          // If content script is not present on the tab, ignore
+          if (!String(err?.message || '').includes('Receiving end does not exist')) {
+            console.warn(`Autofill message to tab ${tab.id} failed:`, err?.message || err);
+          }
+        }
       }
     } catch (error) {
-      console.error(' Autofill request failed:', error.message);
+      console.error('Autofill broadcast failed:', error.message);
     }
   }
 

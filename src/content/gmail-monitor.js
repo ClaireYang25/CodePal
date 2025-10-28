@@ -8,10 +8,15 @@ class GmailContentMonitor {
     constructor() {
         this.selectors = {
             mainContainer: '[role="main"]',
-            emailThread: '[data-thread-id]',
-            emailBody: '.adn.ads' // A more specific and stable selector for the main body
+            threadItem: '[data-thread-id]',
+            messageContainer: '[data-message-id]',
+            // Candidates frequently seen in Gmail DOM for the opened message body
+            bodyCandidates: ['.a3s', '.a3s.aiL', '.gmail_default', '[dir="ltr"]'],
+            // Snippet element used in thread list view
+            snippet: '.y2'
         };
-        this.processedEmailIds = new Set();
+        this.processedMessageIds = new Set();
+        this.processedThreadIds = new Set();
         this.observer = null;
         this.init();
     }
@@ -21,9 +26,9 @@ class GmailContentMonitor {
             await this.waitForElement(this.selectors.mainContainer);
             console.log('✅ Gmail monitor initialized');
             this.startObserver();
-            this.listenForAutofillRequests();
-            // Initial scan for any emails already on the page
-            this.scanForNewEmails();
+            this.attachClickHandler();
+            // Initial scan
+            this.scanForContent();
         } catch (error) {
             console.error('❌ Content script initialization failed:', error);
         }
@@ -45,79 +50,92 @@ class GmailContentMonitor {
         const targetNode = document.querySelector(this.selectors.mainContainer);
         if (!targetNode) return;
 
-        this.observer = new MutationObserver((mutations) => {
-            // A simple debounce to avoid rapid-fire scans
+        this.observer = new MutationObserver(() => {
             clearTimeout(this.scanTimeout);
-            this.scanTimeout = setTimeout(() => this.scanForNewEmails(mutations), 500);
+            this.scanTimeout = setTimeout(() => this.scanForContent(), 400);
         });
 
-        this.observer.observe(targetNode, {
-            childList: true,
-            subtree: true
-        });
+        this.observer.observe(targetNode, { childList: true, subtree: true });
     }
 
-    scanForNewEmails(mutations = []) {
-        const emailBodies = document.querySelectorAll(this.selectors.emailBody);
-
-        for (const emailBody of emailBodies) {
-            // Find the closest parent with a message ID to use as a unique identifier
-            const messageContainer = emailBody.closest('[data-message-id]');
-            if (!messageContainer) continue;
-
-            const messageId = messageContainer.getAttribute('data-message-id');
-            if (this.processedEmailIds.has(messageId)) {
-                continue;
+    attachClickHandler() {
+        document.addEventListener('click', (e) => {
+            const thread = e.target.closest(this.selectors.threadItem);
+            if (thread) {
+                const threadId = thread.getAttribute('data-thread-id');
+                // Defer to allow Gmail to render the message body
+                setTimeout(() => {
+                    this.scanThreadSnippet(thread);
+                    this.scanOpenedMessages();
+                    if (threadId) this.processedThreadIds.add(threadId);
+                }, 500);
             }
+        }, true);
+    }
 
-            const content = emailBody.textContent || '';
-            if (content.trim().length > 10) {
-                console.log(`💌 New email detected (ID: ${messageId}), sending to service worker...`);
-                chrome.runtime.sendMessage({
-                    action: 'extractOTP',
-                    emailContent: content
-                }).catch(err => console.error("Message sending failed:", err));
-                this.processedEmailIds.add(messageId);
+    scanForContent() {
+        // 1) Opened messages: extract from message bodies
+        this.scanOpenedMessages();
+        // 2) Thread list view: extract from visible snippets
+        this.scanThreadList();
+    }
+
+    scanOpenedMessages() {
+        const messageNodes = document.querySelectorAll(this.selectors.messageContainer);
+        for (const node of messageNodes) {
+            const msgId = node.getAttribute('data-message-id');
+            if (!msgId || this.processedMessageIds.has(msgId)) continue;
+
+            const bodyText = this.extractBodyText(node);
+            if (bodyText && bodyText.trim().length > 10) {
+                this.sendForExtraction(bodyText);
+                this.processedMessageIds.add(msgId);
             }
         }
     }
 
-    listenForAutofillRequests() {
-        chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
-            if (request.action === 'fillOTP' && request.otp) {
-                this.fillOtpInPage(request.otp);
-                sendResponse({ success: true });
-            }
-            // Return false as we are not responding asynchronously in all cases
-            return true;
-        });
+    scanThreadList() {
+        const threads = document.querySelectorAll(this.selectors.threadItem);
+        for (const thread of threads) {
+            const threadId = thread.getAttribute('data-thread-id');
+            if (threadId && this.processedThreadIds.has(threadId)) continue;
+            this.scanThreadSnippet(thread);
+            if (threadId) this.processedThreadIds.add(threadId);
+        }
     }
 
-    fillOtpInPage(otp) {
-        // Broad search for potential OTP inputs across the entire document
-        const inputs = document.querySelectorAll('input[type="text"], input[type="number"], input[type="tel"]');
-        const otpKeywords = ['otp', 'verification', 'code', 'token', 'pin', 'auth'];
+    scanThreadSnippet(threadNode) {
+        if (!threadNode) return;
+        const snippetEl = threadNode.querySelector(this.selectors.snippet);
+        const text = (snippetEl?.textContent || '').trim();
+        if (text && text.length > 10) {
+            this.sendForExtraction(text);
+        }
+    }
 
-        for (const input of inputs) {
-            const id = (input.id || '').toLowerCase();
-            const name = (input.name || '').toLowerCase();
-            const placeholder = (input.placeholder || '').toLowerCase();
-            const ariaLabel = (input.getAttribute('aria-label') || '').toLowerCase();
-            
-            const isOtpInput = otpKeywords.some(keyword => 
-                id.includes(keyword) ||
-                name.includes(keyword) ||
-                placeholder.includes(keyword) ||
-                ariaLabel.includes(keyword)
-            );
+    extractBodyText(messageContainer) {
+        // Try multiple candidates under this message container
+        for (const sel of this.selectors.bodyCandidates) {
+            const el = messageContainer.querySelector(sel);
+            const txt = (el?.textContent || '').trim();
+            if (txt && txt.length > 10) return txt;
+        }
+        // Fallback to full container text
+        const fallback = (messageContainer.textContent || '').trim();
+        return fallback;
+    }
 
-            if (isOtpInput && !input.value) {
-                console.log(`🖋️ Found OTP input field, filling with: ${otp}`);
-                input.value = otp;
-                // Dispatch events to simulate manual input, helping frameworks like React detect the change
-                input.dispatchEvent(new Event('input', { bubbles: true }));
-                input.dispatchEvent(new Event('change', { bubbles: true }));
-                return; // Stop after filling the first found field
+    async sendForExtraction(content) {
+        try {
+            await chrome.runtime.sendMessage({
+                action: 'extractOTP',
+                emailContent: content
+            });
+        } catch (err) {
+            // Common when extension reloads; ignore
+            const msg = String(err?.message || '');
+            if (!msg.includes('Extension context invalidated') && !msg.includes('Receiving end does not exist')) {
+                console.warn('Failed to send for extraction:', msg);
             }
         }
     }
