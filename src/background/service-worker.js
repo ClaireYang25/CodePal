@@ -98,8 +98,9 @@ class BackgroundService {
       // Success if confidence > 0.5 (lowered threshold for aggressive local-first)
       if (regexResult.success && regexResult.confidence > 0.5) {
         console.log(`✅ OTP found via LOCAL REGEX (confidence: ${regexResult.confidence})`);
+        await this.storeOTPResult(regexResult);
         sendResponse(regexResult);
-        this.notifyPopupOfUpdate(); // Notify popup
+        this.notifyPopupOfUpdate();
         return;
       }
 
@@ -127,8 +128,9 @@ class BackgroundService {
         
         if (nanoResult?.success) {
           console.log(`✅ OTP found via GEMINI NANO (confidence: ${nanoResult.confidence})`);
+          await this.storeOTPResult(nanoResult);
           sendResponse(nanoResult);
-          this.notifyPopupOfUpdate(); // Notify popup
+          this.notifyPopupOfUpdate();
           return;
         }
 
@@ -147,8 +149,9 @@ class BackgroundService {
       try {
         const apiResult = await this.aiService.extractOTP(emailContent, language);
         console.log('✅ OTP found via GEMINI API (cloud)');
+        await this.storeOTPResult(apiResult);
         sendResponse(apiResult);
-        this.notifyPopupOfUpdate(); // Notify popup
+        this.notifyPopupOfUpdate();
         return;
         
       } catch (error) {
@@ -167,6 +170,22 @@ class BackgroundService {
     } catch (error) {
       console.error('❌ OTP extraction error:', error);
       sendResponse({ success: false, error: error.message });
+    }
+  }
+
+  /**
+   * Store OTP result with extraction method
+   */
+  async storeOTPResult(result) {
+    if (result.success && result.otp) {
+      await chrome.storage.local.set({
+        [CONFIG.STORAGE_KEYS.LATEST_OTP]: {
+          otp: result.otp,
+          timestamp: Date.now(),
+          method: result.method || 'unknown',
+          confidence: result.confidence
+        }
+      });
     }
   }
 
@@ -226,7 +245,6 @@ class BackgroundService {
   async handleTestGeminiNano(sendResponse) {
     try {
       console.log('🧪 Testing Gemini Nano status...');
-      
       const result = await this.callOffscreenNano({
         action: CONFIG.ACTIONS.OFFSCREEN_TEST_CONNECTION
       });

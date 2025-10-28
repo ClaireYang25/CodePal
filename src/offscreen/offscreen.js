@@ -23,7 +23,10 @@ async function initializeNano() {
     }
 
     // Check availability with output language expectation
-    const availabilityOpts = { expectedOutputs: [{ type: 'text', language: 'en' }] };
+    const availabilityOpts = {
+      expectedInputs: [{ type: 'text', languages: ['en'] }],
+      expectedOutputs: [{ type: 'text', languages: ['en'] }]
+    };
     const availability = await globalThis.LanguageModel.availability(availabilityOpts);
     console.log('📊 Gemini Nano availability:', availability);
     console.log('📊 availability typeof:', typeof availability);
@@ -46,12 +49,12 @@ async function initializeNano() {
       return { success: false, error: errorMsg, status: 'unavailable' };
     }
 
-    // Handle 'downloadable' or 'after-download' status
-    if (availabilityLower === 'after-download' || availabilityLower === 'downloadable') {
+  // Handle 'downloadable' or 'after-download' status
+  if (availabilityLower === 'after-download' || availabilityLower === 'downloadable') {
       console.log('⏬ Gemini Nano model needs to be downloaded (user gesture required)');
-      // Don't create session yet. Return downloadable status for UI to handle.
+      // 返回真实 API 状态：downloadable/after-download
       return { success: true, message: 'Model ready to download', status: 'downloadable' };
-    }
+  }
 
     // Handle 'downloading' status
     if (availabilityLower === 'downloading') {
@@ -69,7 +72,8 @@ async function initializeNano() {
     console.log('📝 Creating Nano session...');
     nanoSession = await globalThis.LanguageModel.create({
       systemPrompt: 'You are a verification code extraction assistant. Always respond in English with valid JSON format.',
-      expectedOutputs: [{ type: 'text', language: 'en' }],
+      expectedInputs: [{ type: 'text', languages: ['en'] }],
+      expectedOutputs: [{ type: 'text', languages: ['en'] }],
       monitor(m) {
         m.addEventListener('downloadprogress', (e) => {
           console.log(`⏬ Nano model download: ${Math.round(e.loaded * 100)}%`);

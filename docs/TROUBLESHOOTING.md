@@ -1,340 +1,83 @@
 # 🔧 Gmail OTP AutoFill - 故障排查指南
 
-本文档记录已知问题和解决方案。
+本文档记录了开发过程中遇到的关键问题及其最终解决方案。
 
 ---
 
-## ✅ Chrome 版本要求
+## 🚀 核心问题：Gemini Nano 模型下载失败
 
-### 必需版本
+这是项目中最核心的挑战。现象包括：UI卡在“下载中”但进度为0%，或者UI状态在关闭后无法保持。
 
-| 功能 | 最低 Chrome 版本 | 推荐版本 |
-|------|----------------|---------|
-| 扩展基本功能 | Chrome 88+ | Chrome 128+ |
-| Offscreen API | Chrome 116+ | Chrome 128+ |
-| Gemini Nano (Prompt API) | Chrome 128+ | Chrome 131+ |
+### 根本原因分析
 
-### 检查你的版本
+1.  **用户手势 (User Gesture) 丢失**: `LanguageModel.create()` API **必须**在一个由用户直接发起的事件（如点击）中调用，才能触发模型下载。通过 Service Worker 或 Offscreen Document 间接触发常常会失败，因为手势上下文已经丢失。
+2.  **架构过于复杂**: 最初，下载状态的管理逻辑分散在 `popup.js`, `service-worker.js`, 和 `offscreen.js` 中。这种分散导致了状态不一致、消息冲突和循环依赖，使问题难以定位。
+3.  **消息路由冲突**: 从 Popup 发出的消息（如 `triggerNanoDownload`）同时被 Service Worker 和 Offscreen Document 监听，导致 Service Worker 拦截了本应由 Offscreen 处理的消息，并抛出 `Unknown action` 错误。
+4.  **Chrome 用户配置文件损坏**: 在某些情况下，即时代码完全正确，一个“脏”的或损坏的 Chrome 用户配置文件也会阻止模型下载。
 
-访问：`chrome://version`
+### ✅ 最终解决方案：极简架构
 
-如果你的版本 < 116，Gemini Nano 功能将不可用，但本地正则引擎仍然可以工作（90%+ 覆盖率）。
+我们通过以下步骤彻底解决了问题：
 
----
+1.  **简化下载触发器**:
+    *   **唯一入口**: 移除所有在 Service Worker 和 Offscreen 中的下载相关代码。现在，**只有 `popup.js`** 负责处理模型下载。
+    *   **直接调用**: 当用户点击 Popup 中的下载按钮时，我们**直接**在 `popup.js` 的点击事件处理器中调用 `LanguageModel.create()`。这确保了“用户手势”的有效性。
 
-## 🐛 已知问题与解决方案
+2.  **明确消息目标**:
+    *   为了防止消息被错误的组件接收，我们为发往 Offscreen Document 的消息添加了一个 `target` 字段。
+    *   **发送方 (`service-worker.js`)**:
+        ```javascript
+        const targetedMessage = { ...message, target: 'offscreen' };
+        const response = await chrome.runtime.sendMessage(targetedMessage);
+        ```
+    *   **接收方 (`offscreen.js`)**:
+        ```javascript
+        if (request.target !== 'offscreen') {
+          console.log('⏭️ Message not for offscreen, ignoring');
+          return; // 忽略不属于自己的消息
+        }
+        ```
 
-### 问题 1: `Unrecognized manifest key 'offscreen'`
-
-**现象**:
-```
-Warnings:
-Unrecognized manifest key 'offscreen'.
-```
-
-**原因**: 
-- Chrome 版本 < 116 不支持 `offscreen` API
-- 我们已从 manifest.json 中移除了静态声明
-
-**解决方案**:
-1. 升级到 Chrome 116+
-2. 或者接受此限制：Gemini Nano 不可用，但本地正则仍然工作
-
-**状态**: ✅ 已修复（改为运行时动态检查）
-
----
-
-### 问题 2: `Permission 'modelAccess' is unknown`
-
-**现象**:
-```
-Permissions warnings:
-Permission 'modelAccess' is unknown.
-```
-
-**原因**: 
-- `modelAccess` 是实验性权限，在某些 Chrome 版本中不被识别
-- 这个权限实际上不是必需的
-
-**解决方案**:
-已从 manifest.json 中移除
-
-**状态**: ✅ 已修复
+3.  **最终调试手段**:
+    *   当代码逻辑确认无误但下载依然失败时，**创建一个全新的 Chrome 用户配置文件** (`Create a new person/profile`) 是最终的解决方案。在新环境中，模型成功下载。
 
 ---
 
-### 问题 3: `No output language was specified in a LanguageModel API request`
+## 🐛 其他关键问题与解决方案
 
-**现象**:
-```
-No output language was specified in a LanguageModel API request. 
-An output language should be specified to ensure optimal output quality...
-Please specify a supported output language code: [en, es, ja]
-```
+### Gemini Nano & Offscreen
 
-**原因**: 
-Gemini Nano 要求明确指定输出语言
+| 问题描述 | 原因与解决方案 |
+| :--- | :--- |
+| **`No output language was specified...`** | **原因**: Nano API 强制要求指定输入和输出语言以保证安全性和质量。 <br> **解决方案**: 在 `LanguageModel.create()` 和 `LanguageModel.availability()` 中明确提供 `expectedInputs` 和 `expectedOutputs` 参数。 |
+| **`Failed to read the 'type' property from 'LanguageModelExpected'...`** | **原因**: `expectedOutputs` 的语法结构不正确。 <br> **解决方案**: 修正为正确的数组对象格式：`expectedOutputs: [{ type: 'text', languages: ['en'] }]`。 |
+| **`popup.js` 中 `this` 上下文丢失导致 `TypeError`** | **原因**: 在 `LanguageModel.create()` 的 `monitor` 回调中使用了普通函数，导致 `this` 指向改变，无法访问 `PopupController` 实例属性。 <br> **解决方案**: 将回调改为**箭头函数**以正确绑定 `this` 上下文：`monitor: (m) => { ... }`。 |
 
-**解决方案**:
-在创建 session 时添加 `systemPrompt`:
-```javascript
-session = await globalThis.LanguageModel.create({
-  systemPrompt: 'You are a verification code extraction assistant. Always respond in English.',
-  // ...
-});
-```
+### Manifest & 配置
 
-**状态**: ✅ 已修复
+| 问题描述 | 原因与解决方案 |
+| :--- | :--- |
+| **`Unrecognized manifest key 'offscreen'`** | **原因**: 使用的 Chrome 版本低于 116，不支持 Offscreen API。 <br> **解决方案**: 代码中加入了动态检查 `chrome.offscreen` 是否存在，进行优雅降级。 |
+| **`Permission 'modelAccess' is unknown`** | **原因**: `modelAccess` 是一个实验性权限，并非所有版本都支持，且对于本项目并非必需。 <br> **解决方案**: 从 `manifest.json` 中移除该权限。 |
 
----
+### UI & 状态管理
 
-### 问题 4: `Failed to initialize Gemini Nano: [object DOMException]`
+| 问题描述 | 原因与解决方案 |
+| :--- | :--- |
+| **UI 状态不更新 (e.g., 不显示 "下载中")** | **原因**: `popup.css` 中缺少对应状态（如 `.downloading`, `.ready`）的样式规则。 <br> **解决方案**: 添加完整的 CSS 样式来匹配不同的 AI 状态。 |
+| **`chrome.storage.local.get` 抛出 `TypeError`** | **原因**: `get` 方法的参数格式错误，传入了字符串而不是预期的**数组或对象**。 <br> **解决方案**: 修正参数格式：`chrome.storage.local.get(['key1', 'key2'])`。 |
 
-**现象**:
-```
-❌ Failed to initialize Gemini Nano: [object DOMException]
-```
+### 核心逻辑
 
-**可能原因**:
-1. 语言配置问题（见问题 3）
-2. Chrome Flags 未正确启用
-3. 模型尚未下载
-4. 硬件不支持
-
-**解决方案**:
-
-#### 步骤 1: 启用 Chrome Flags
-访问：`chrome://flags/#prompt-api-for-gemini-nano`
-设置为：**Enabled**
-重启浏览器
-
-#### 步骤 2: 检查模型状态
-访问：`chrome://on-device-internals`
-
-你应该看到：
-- **Ready**: 模型已下载，可以使用 ✅
-- **Downloading**: 模型正在下载中（等待几分钟）⏳
-- **Not Available**: 你的设备不支持 ❌
-
-#### 步骤 3: 确认硬件要求
-Gemini Nano 需要：
-- **GPU**: 显存 > 4GB
-- **或 CPU**: 内存 >= 16GB + 4核心以上
-
-**状态**: ⚠️ 取决于你的环境
+| 问题描述 | 原因与解决方案 |
+| :--- | :--- |
+| **`All OTP extraction methods failed`** | **原因**: `gmail-monitor.js` (Content Script) 捕获到的邮件 DOM 元素内容为空，但依然发送给了 Service Worker。 <br> **解决方案**: 在 Content Script 和 Service Worker 中添加了双重验证，确保只有非空内容才会被处理。 |
 
 ---
 
-### 问题 5: `Uncaught (in promise) Error: A listener indicated an asynchronous response...`
+## 🛠️ 调试技巧
 
-**现象**:
-```
-Uncaught (in promise) Error: A listener indicated an asynchronous 
-response by returning true, but the message channel closed before 
-a response was received
-```
-
-**原因**:
-1. Content Script 或 Offscreen Document 崩溃
-2. 消息处理函数中有未处理的 Promise rejection
-3. `sendResponse` 在异步操作完成前被清理
-
-**解决方案**:
-确保所有消息处理函数都：
-1. 返回 `true` 以保持消息通道开放
-2. 始终调用 `sendResponse()`，即使在错误情况下
-
-**示例（正确做法）**:
-```javascript
-chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
-  handleMessage(request, sendResponse).catch(error => {
-    sendResponse({ error: error.message });
-  });
-  return true; // 保持通道开放
-});
-```
-
-**状态**: ⚠️ 监控中
-
----
-
-### 问题 6: Gmail 页面警告（可忽略）
-
-**现象**:
-```
-Host validation failed: Object
-Host is not in insights whitelist
-```
-
-**原因**:
-这些是 Gmail 自己的内部警告，与我们的扩展无关
-
-**解决方案**:
-无需处理，不影响功能
-
-**状态**: ✅ 可忽略
-
----
-
-## 🧪 测试 Gemini Nano 可用性
-
-### 快速测试脚本
-
-1. 打开任意网页
-2. 按 F12 打开开发者工具
-3. 在 Console 中运行：
-
-```javascript
-// 测试 API 可用性
-if (typeof globalThis.LanguageModel !== 'undefined') {
-  globalThis.LanguageModel.availability().then(availability => {
-    console.log('Gemini Nano availability:', availability);
-    
-    if (availability === 'readily') {
-      console.log('✅ Gemini Nano is ready to use!');
-    } else if (availability === 'after-download') {
-      console.log('⏬ Gemini Nano needs to be downloaded first');
-    } else {
-      console.log('❌ Gemini Nano is not available on this device');
-    }
-  });
-} else {
-  console.log('❌ LanguageModel API not available. Please enable chrome://flags/#prompt-api-for-gemini-nano');
-}
-```
-
-### 预期结果
-
-- **`readily`**: 可以立即使用 ✅
-- **`after-download`**: 需要下载模型 ⏳
-- **`no`**: 设备不支持 ❌
-
----
-
-## 🔄 如果 Gemini Nano 不可用
-
-### 方案 A: 使用本地正则引擎
-
-本地正则引擎可以识别 **90%+** 的标准 OTP 格式，速度极快（< 50ms）。
-
-**测试本地引擎**:
-```bash
-cd /Users/claireyang/Desktop/Googleddddd
-node tests/test.js
-```
-
-你应该看到所有测试通过。
-
-### 方案 B: 配置 Gemini API（云端备用）
-
-1. 访问：https://aistudio.google.com/app/apikey
-2. 创建 API Key
-3. 在扩展 Popup 中输入并保存
-
-**优点**: 可以处理复杂场景  
-**缺点**: 需要网络请求（~2s），消耗 API 配额
-
----
-
-## 📊 三层引擎工作状态检查
-
-在 Service Worker Console 中查看日志：
-
-### 正常流程
-
-```
-✅ Background service initialized
-✅ OTP found via local regex (confidence: 0.95)
-```
-
-### Gemini Nano 不可用时
-
-```
-✅ Background service initialized
-⚠️ Local regex confidence low (0.5), trying Gemini Nano...
-⚠️ Gemini Nano failed, trying API fallback: Offscreen API not available...
-❌ All OTP extraction methods failed
-```
-
-这说明：
-1. 本地正则置信度低
-2. Gemini Nano 不可用
-3. Gemini API 未配置
-
-**解决**: 配置 Gemini API 作为备用
-
----
-
-## 🆘 完全失败的情况
-
-如果你看到：
-```
-❌ All OTP extraction methods failed
-```
-
-**检查清单**:
-1. [ ] 邮件内容是否包含 4-8 位数字？
-2. [ ] 邮件是否包含关键词（"验证码"、"code"、"OTP"）？
-3. [ ] 是否配置了 Gemini API Key？
-4. [ ] 查看 Service Worker Console 的详细错误信息
-
----
-
-## 📞 获取帮助
-
-### 查看日志
-
-1. **Service Worker 日志**:
-   - `chrome://extensions/` → "Service Worker" 链接
-
-2. **Content Script 日志**:
-   - Gmail 页面 → 按 F12 → Console 标签
-
-3. **Offscreen Document 日志**:
-   - `chrome://extensions/` → "检查视图" → offscreen.html
-
-### 提供信息
-
-如果需要帮助，请提供：
-1. Chrome 版本 (`chrome://version`)
-2. 完整的错误日志
-3. 测试的邮件内容格式
-4. `chrome://on-device-internals` 的截图
-
----
-
-## ✅ 成功标准
-
-一个完全正常工作的扩展应该显示：
-
-### Service Worker Console
-```
-✅ Background service initialized
-```
-
-### Gmail 页面 Console
-```
-✅ Gmail monitor initialized
-```
-
-### Offscreen Document Console（如果 Gemini Nano 可用）
-```
-✅ Offscreen document loaded, waiting for requests...
-Gemini Nano availability: readily
-✅ Gemini Nano session created
-```
-
-### 本地正则测试
-```bash
-$ node tests/test.js
-✅ 中文 - 验证码: 123456
-✅ English - Code: 789012
-✅ Español - Código: 456789
-✅ Italiano - Codice: 345678
-```
-
----
-
-**最后更新**: 2025-01-XX  
-**文档版本**: 1.0
+- **查看 Offscreen Console**: 在 `chrome://extensions` 页面，找到你的扩展，点击 `Service Worker` 链接，在打开的控制台中执行 `chrome.offscreen.openDocument('src/offscreen/offscreen.html')`，即可在弹出的窗口中查看 Offscreen 的日志。
+- **检查模型状态**: 访问 `chrome://on-device-internals` 查看 Gemini Nano 模型的下载状态、硬件要求和可用性。
+- **使用干净的配置文件**: 如果怀疑是环境问题，务必在新的 Chrome 用户配置文件中测试。
 

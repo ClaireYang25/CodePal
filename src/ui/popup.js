@@ -28,7 +28,6 @@ class PopupController {
             cloudFallback: false,
         };
 
-        // Poller for AI status during download
         this.statusPoller = null;
 
         this.init();
@@ -61,9 +60,7 @@ class PopupController {
         const keysToGet = [
             CONFIG.STORAGE_KEYS.POPUP_SETTINGS,
             CONFIG.STORAGE_KEYS.GEMINI_API_KEY,
-            CONFIG.STORAGE_KEYS.LATEST_OTP,
-            CONFIG.STORAGE_KEYS.NANO_DOWNLOAD_STATE,
-            CONFIG.STORAGE_KEYS.NANO_DOWNLOAD_STARTED_AT
+            CONFIG.STORAGE_KEYS.LATEST_OTP
         ];
         const result = await chrome.storage.local.get(keysToGet);
         
@@ -74,13 +71,6 @@ class PopupController {
             this.elements.apiKeyInput.value = "••••••••••••••••";
         }
         this.updateLatestOtpDisplay(result[CONFIG.STORAGE_KEYS.LATEST_OTP]);
-
-        // Restore AI status if a download is in progress (persisted state)
-        const persistedState = result[CONFIG.STORAGE_KEYS.NANO_DOWNLOAD_STATE];
-        if (persistedState === 'downloading') {
-            const progress = result[CONFIG.STORAGE_KEYS.NANO_DOWNLOAD_PROGRESS];
-            this.setAiStatus('downloading', progress ? `Downloading model... ${progress}%` : 'Download in progress...');
-        }
     }
 
     async saveSettings() {
@@ -111,52 +101,54 @@ class PopupController {
         if (latestOtp && latestOtp.otp) {
             this.elements.otpValue.textContent = latestOtp.otp;
             const timeAgo = this.formatTimeAgo(latestOtp.timestamp);
-            this.elements.otpTimestamp.textContent = `Found ${timeAgo}`;
+            const methodBadge = this.getMethodBadge(latestOtp.method);
+            this.elements.otpTimestamp.textContent = `Found ${timeAgo} ${methodBadge}`;
         } else {
             this.elements.otpValue.textContent = '-- -- -- --';
             this.elements.otpTimestamp.textContent = 'Waiting for new OTP emails...';
         }
     }
 
+    getMethodBadge(method) {
+        const badges = {
+            'regex': '⚡ Local',
+            'gemini-nano': '🤖 On-Device AI',
+            'gemini-api': '☁️ Cloud AI'
+        };
+        return badges[method] || '';
+    }
+
     async checkNanoStatus() {
         console.log('🔍 Checking Nano status...');
-        
-        // Read persisted state first to avoid UI being overridden prematurely
-        const persisted = await chrome.storage.local.get([CONFIG.STORAGE_KEYS.NANO_DOWNLOAD_STATE]);
-        const persistedState = persisted[CONFIG.STORAGE_KEYS.NANO_DOWNLOAD_STATE];
 
-        const response = await this.sendMessage({ action: CONFIG.ACTIONS.TEST_GEMINI_NANO });
-        console.log('📬 Backend response:', response);
-        
-        if (!response || !response.success) {
-            console.log('❌ Backend returned error');
-            this.setAiStatus('error', response?.error || 'On-Device AI Unavailable');
-            return;
-        }
-        
-        // Simple status mapping
-        switch (response.status) {
-            case 'downloadable':
-                // Guard: if user already triggered download in popup, keep "downloading"
-                if (persistedState === 'downloading') {
-                    console.log('✅ Persisted state is downloading → keeping downloading UI');
-                    this.setAiStatus('downloading', 'Model is downloading...');
-                } else {
-                    console.log('✅ Status: downloadable - showing download button');
-                    this.setAiStatus('download-required', 'Download On-Device AI');
-                }
-                break;
-            case 'downloading':
-                console.log('✅ Status: downloading');
+        try {
+            if (typeof globalThis.LanguageModel === 'undefined') {
+                this.setAiStatus('error', 'On-Device AI Unavailable');
+                return;
+            }
+
+            const opts = {
+                expectedInputs: [{ type: 'text', languages: ['en'] }],
+                expectedOutputs: [{ type: 'text', languages: ['en'] }]
+            };
+
+            const availability = await globalThis.LanguageModel.availability(opts);
+            const status = String(availability).toLowerCase();
+            console.log('📊 availability:', status);
+
+            // Simplified status handling: focus on ready/unavailable states
+            if (status === 'readily' || status === 'available') {
+                this.setAiStatus('ready', 'On-Device AI Ready');
+            } else if (status === 'downloadable' || status === 'after-download') {
+                this.setAiStatus('download-required', 'Download On-Device AI');
+            } else if (status === 'downloading') {
                 this.setAiStatus('downloading', 'Model is downloading...');
-                break;
-            case 'ready':
-                console.log('✅ Status: ready');
-                this.setAiStatus('ready', 'On-Device AI Ready');
-                break;
-            default:
-                console.log('⚠️ Unknown status:', response.status);
-                this.setAiStatus('ready', 'On-Device AI Ready');
+            } else {
+                this.setAiStatus('error', 'On-Device AI Unavailable');
+            }
+        } catch (e) {
+            console.log('❌ availability check failed:', e?.message || e);
+            this.setAiStatus('error', 'On-Device AI Unavailable');
         }
     }
 
@@ -166,32 +158,27 @@ class PopupController {
 
         // Reset classes
         this.elements.aiStatusBar.classList.remove('ready', 'downloading', 'error', 'download-required');
-        this.elements.aiStatusBar.onclick = null; // Clear previous click handlers
+        this.elements.aiStatusBar.onclick = null;
+        this.elements.aiStatusBar.title = '';
 
-        if (status === 'downloading') {
+        if (status === 'ready') {
+            spinner.style.display = 'none';
+            this.elements.aiStatusBar.classList.add('ready');
+            this.stopStatusPolling();
+        } else if (status === 'downloading') {
             spinner.style.display = 'block';
             this.elements.aiStatusBar.classList.add('downloading');
             this.startStatusPolling();
-            chrome.storage.local.set({ [CONFIG.STORAGE_KEYS.NANO_DOWNLOAD_STATE]: 'downloading', [CONFIG.STORAGE_KEYS.NANO_DOWNLOAD_STARTED_AT]: Date.now() });
         } else if (status === 'download-required') {
             spinner.style.display = 'none';
             this.elements.aiStatusBar.classList.add('download-required');
             this.elements.aiStatusBar.onclick = () => this.triggerNanoDownload();
             this.elements.aiStatusBar.title = 'Click to start downloading the on-device AI model (approx. 400MB)';
             this.stopStatusPolling();
-            chrome.storage.local.remove([CONFIG.STORAGE_KEYS.NANO_DOWNLOAD_STATE, CONFIG.STORAGE_KEYS.NANO_DOWNLOAD_STARTED_AT]);
-        } else {
+        } else if (status === 'error') {
             spinner.style.display = 'none';
-            this.elements.aiStatusBar.title = '';
-            if (status === 'ready') {
-                 this.elements.aiStatusBar.classList.add('ready');
-                 this.stopStatusPolling();
-                 chrome.storage.local.set({ [CONFIG.STORAGE_KEYS.NANO_DOWNLOAD_STATE]: 'ready' });
-            } else if (status === 'error') {
-                 this.elements.aiStatusBar.classList.add('error');
-                 this.stopStatusPolling();
-                 chrome.storage.local.set({ [CONFIG.STORAGE_KEYS.NANO_DOWNLOAD_STATE]: 'error' });
-            }
+            this.elements.aiStatusBar.classList.add('error');
+            this.stopStatusPolling();
         }
     }
 
@@ -210,80 +197,34 @@ class PopupController {
     }
 
     async triggerNanoDownload() {
-        console.log('🎯 === DOWNLOAD TRIGGERED ===');
+        console.log('🎯 Triggering Nano model download...');
         
         try {
-            // Step 1: Check if API exists
             if (typeof globalThis.LanguageModel === 'undefined') {
-                console.error('❌ LanguageModel API not available');
-                console.error('💡 Check chrome://flags/#prompt-api-for-gemini-nano');
-                throw new Error('LanguageModel API not available');
-            }
-            console.log('✅ Step 1: API available');
-            
-            // Step 2: Check availability with DETAILED logging
-            console.log('📊 Step 2: Checking availability...');
-            const availability = await globalThis.LanguageModel.availability({
-                expectedOutputs: [{ type: 'text', language: 'en' }]
-            });
-            console.log('📊 Raw availability:', availability);
-            console.log('📊 Type:', typeof availability);
-            console.log('📊 String:', String(availability));
-            console.log('📊 Lowercase:', String(availability).toLowerCase());
-            
-            // Step 3: Decide UI state based on availability
-            const availStr = String(availability).toLowerCase();
-            
-            if (availStr === 'no' || availStr === 'unavailable') {
-                throw new Error('Gemini Nano not supported on this device');
+                throw new Error('LanguageModel API not available. Check chrome://flags/#prompt-api-for-gemini-nano');
             }
             
-            if (availStr === 'downloadable' || availStr === 'after-download') {
-                this.setAiStatus('downloading', 'Starting download...');
-                console.log('⏬ Model needs download, will call create()...');
-            } else if (availStr === 'downloading') {
-                this.setAiStatus('downloading', 'Download in progress...');
-                console.log('⏬ Model is already downloading...');
-            } else if (availStr === 'readily' || availStr === 'available') {
-                console.log('✅ Model is ready!');
-                this.setAiStatus('ready', 'On-Device AI Ready');
-                return;
-            }
-            
-            // Step 4: Call create() to trigger/continue download
-            console.log('📝 Step 4: Calling create() to trigger download...');
+            this.setAiStatus('downloading', 'Starting download...');
+            console.log('📝 Calling create() with user gesture...');
             
             const session = await globalThis.LanguageModel.create({
-                expectedOutputs: [{ type: 'text', language: 'en' }],
-                monitor(m) {
+                expectedInputs: [{ type: 'text', languages: ['en'] }],
+                expectedOutputs: [{ type: 'text', languages: ['en'] }],
+                monitor: (m) => {
                     m.addEventListener('downloadprogress', (e) => {
                         const progress = Math.round(e.loaded * 100);
-                        console.log(`⏬ DOWNLOAD PROGRESS: ${progress}%`);
-                        
-                        // Update UI
+                        console.log(`⏬ Download progress: ${progress}%`);
                         const el = document.getElementById('ai-status-text');
                         if (el) el.textContent = `Downloading model... ${progress}%`;
-                        chrome.storage.local.set({ [CONFIG.STORAGE_KEYS.NANO_DOWNLOAD_PROGRESS]: progress });
-                        if (progress >= 1) {
-                            chrome.storage.local.set({ [CONFIG.STORAGE_KEYS.NANO_DOWNLOAD_STATE]: 'downloading' });
-                        }
                     });
                 }
             });
             
-            console.log('✅ Step 5: create() completed!');
-            console.log('Session type:', typeof session);
-            console.log('Session has prompt:', typeof session?.prompt === 'function');
-            
-            // If we got a session, model is ready
+            console.log('✅ Model downloaded and session created');
             this.setAiStatus('ready', 'On-Device AI Ready');
-            console.log('✅✅✅ Download complete! Model is ready to use.');
             
         } catch (error) {
-            console.error('❌ ERROR in triggerNanoDownload:', error);
-            console.error('Error name:', error.name);
-            console.error('Error message:', error.message);
-            console.error('Error stack:', error.stack);
+            console.error('❌ Download failed:', error);
             this.setAiStatus('error', error.message || 'Download failed');
         }
     }
