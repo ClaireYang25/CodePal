@@ -34,18 +34,18 @@ export class OTPEngine {
       // English rules
       en: {
         patterns: [
-          /verification code[：:]\s*(\d{4,8})/i,
-          /verification code is[：:]\s*(\d{4,8})/i,
-          /your code[：:]\s*(\d{4,8})/i,
-          /code[：:]\s*(\d{4,8})/i,
-          /otp[：:]\s*(\d{4,8})/i,
-          /pin[：:]\s*(\d{4,8})/i,
-          /(\d{4,8})\s*is your verification code/i,
-          /(\d{6})\s*verification code/i,
-          /use code\s*(\d{4,8})/i
+          /verification\s+code\s*[：:is\s]+(\d{4,8})/i,
+          /your\s+(?:verification\s+)?code\s*[：:is\s]+(\d{4,8})/i,
+          /code\s*[：:is\s]+(\d{4,8})/i,
+          /otp\s*[：:is\s]+(\d{4,8})/i,
+          /pin\s*[：:is\s]+(\d{4,8})/i,
+          /(\d{4,8})\s+is\s+your\s+(?:verification\s+)?code/i,
+          /(\d{6})\s+(?:verification\s+)?code/i,
+          /use\s+code\s+(\d{4,8})/i,
+          /security\s+code\s*[：:is\s]+(\d{4,8})/i
         ],
-        keywords: ['verification', 'code', 'otp', 'pin', 'token'],
-        contexts: ['login', 'signup', 'security', 'authentication']
+        keywords: ['verification', 'code', 'otp', 'pin', 'token', 'security'],
+        contexts: ['login', 'signup', 'security', 'authentication', 'verify']
       },
       
       // Spanish rules
@@ -138,7 +138,6 @@ export class OTPEngine {
   cleanContent(content) {
     return content
       .replace(/\s+/g, ' ')
-      .replace(/[^\w\s\d：:]/g, '')
       .trim();
   }
 
