@@ -93,28 +93,28 @@ export class OTPEngine {
    * @param {string} language - Language code ('auto', 'zh', 'en', 'es', 'it')
    * @returns {Promise<Object>} Extraction result
    */
-  async extractOTP(content, language = CONFIG.LANGUAGES.AUTO) {
+  async extractOTP(content, language) {
     try {
-      const cleanContent = this.cleanContent(content);
-      const detectedLanguage = language === CONFIG.LANGUAGES.AUTO ? 
-        this.detectLanguage(cleanContent) : language;
+      // The service worker now detects the language.
+      // We directly use the provided language for rule selection.
+      const detectedLanguage = language;
       
       const results = [];
       
       // 1. Try specific language rules
       if (this.rules[detectedLanguage]) {
-        const result = this.matchWithRules(cleanContent, this.rules[detectedLanguage]);
+        const result = this.matchWithRules(content, this.rules[detectedLanguage]);
         if (result) results.push({ ...result, language: detectedLanguage, priority: 1 });
       }
       
       // 2. Try English rules as fallback
       if (detectedLanguage !== CONFIG.LANGUAGES.ENGLISH) {
-        const result = this.matchWithRules(cleanContent, this.rules[CONFIG.LANGUAGES.ENGLISH]);
+        const result = this.matchWithRules(content, this.rules[CONFIG.LANGUAGES.ENGLISH]);
         if (result) results.push({ ...result, language: CONFIG.LANGUAGES.ENGLISH, priority: 2 });
       }
       
       // 3. Try universal number patterns
-      const universalResult = this.matchWithRules(cleanContent, this.rules.universal);
+      const universalResult = this.matchWithRules(content, this.rules.universal);
       if (universalResult) results.push({ ...universalResult, language: 'universal', priority: 3 });
       
       const bestResult = this.selectBestResult(results);
@@ -133,43 +133,26 @@ export class OTPEngine {
   }
 
   /**
-   * Clean email content
+   * Normalizes whitespace in the content for easier regex matching.
+   * Marked as private by convention.
    */
-  cleanContent(content) {
-    return content
-      .replace(/\s+/g, ' ')
-      .trim();
-  }
-
-  /**
-   * Detect language from content
-   */
-  detectLanguage(content) {
-    const patterns = {
-      [CONFIG.LANGUAGES.CHINESE]: /[\u4e00-\u9fff]/,
-      [CONFIG.LANGUAGES.SPANISH]: /[ñáéíóúü]/i,
-      [CONFIG.LANGUAGES.ITALIAN]: /[àèéìíîòóù]/i
-    };
-
-    for (const [lang, pattern] of Object.entries(patterns)) {
-      if (pattern.test(content)) return lang;
-    }
-    
-    return CONFIG.LANGUAGES.ENGLISH;
+  _normalizeWhitespace(content) {
+    return content.replace(/\s+/g, ' ').trim();
   }
 
   /**
    * Match content with rules
    */
   matchWithRules(content, rules) {
+    const normalizedContent = this._normalizeWhitespace(content);
     let bestMatch = null;
     let highestConfidence = 0;
 
     for (const pattern of rules.patterns) {
-      const matches = content.match(pattern);
+      const matches = normalizedContent.match(pattern);
       if (matches && matches[1]) {
         const otp = matches[1];
-        const confidence = this.calculateConfidence(content, otp, rules);
+        const confidence = this.calculateConfidence(normalizedContent, otp, rules);
         
         if (confidence > highestConfidence) {
           highestConfidence = confidence;
@@ -221,15 +204,5 @@ export class OTPEngine {
     });
     
     return results[0];
-  }
-
-  /**
-   * Validate OTP format
-   */
-  isValidOTP(otp) {
-    if (!otp || typeof otp !== 'string') return false;
-    if (!/^\d+$/.test(otp)) return false;
-    if (otp.length < CONFIG.OTP.MIN_LENGTH || otp.length > CONFIG.OTP.MAX_LENGTH) return false;
-    return true;
   }
 }
