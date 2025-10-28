@@ -14,7 +14,6 @@ class BackgroundService {
   constructor() {
     this.aiService = new AIService();
     this.otpEngine = new OTPEngine();
-    this.offscreenCreated = false;
     this.init();
   }
 
@@ -68,114 +67,108 @@ class BackgroundService {
   }
 
   /**
-   * THREE-TIER INTELLIGENT OTP EXTRACTION ENGINE
-   * 
-   * Tier 1: Local Regex (< 50ms, privacy-first)
-   * Tier 2: Gemini Nano (on-device, no network)
-   * Tier 3: Gemini API (cloud, requires key)
+   * Main OTP extraction workflow.
+   * This is the entry point for the three-tier engine.
    */
   async handleExtractOTP(request, sendResponse) {
-    try {
-      const { emailContent, language } = request;
-      
-      // Validate content
-      if (!emailContent || emailContent.trim().length < 10) {
-        console.warn('⚠️ Email content too short, skipping');
-        sendResponse({ 
-          success: false, 
-          error: 'Email content is empty or too short' 
-        });
-        return;
-      }
+    const { emailContent } = request;
+    const language = this.detectLanguage(emailContent);
+    let result = { success: false, confidence: 0 };
 
-      console.log('🔍 Starting three-tier OTP extraction...');
+    console.log(`🔍 Starting three-tier OTP extraction for email (lang: ${language})...`);
 
-      // ============================================
-      // TIER 1: LOCAL REGEX MATCHING
-      // ============================================
-      console.log('1️⃣ Tier 1: Trying local regex...');
-      const regexResult = await this.otpEngine.extractOTP(emailContent, language);
-      
-      // Success if confidence > 0.5 (lowered threshold for aggressive local-first)
-      if (regexResult.success && regexResult.confidence > 0.5) {
-        console.log(`✅ OTP found via LOCAL REGEX (confidence: ${regexResult.confidence})`);
-        await this.storeOTPResult(regexResult);
-        sendResponse(regexResult);
-        this.notifyPopupOfUpdate();
-        return;
-      }
-
-      console.log(`⚠️ Regex confidence low (${regexResult.confidence}), moving to Tier 2...`);
-
-      // ============================================
-      // TIER 2: GEMINI NANO (ON-DEVICE AI)
-      // ============================================
-      console.log('2️⃣ Tier 2: Trying Gemini Nano...');
-      
-      try {
-        const nanoResult = await this.callOffscreenNano({
-          action: CONFIG.ACTIONS.OFFSCREEN_EXTRACT_OTP,
-          emailContent,
-          language
-        });
-        
-        console.log('📥 Nano returned:', JSON.stringify(nanoResult));
-
-        // If Nano requires a user-triggered download, skip it for now.
-        if (nanoResult?.status === 'downloadable') {
-            console.log('⚠️ Nano requires user-triggered download, skipping Tier 2 for this automatic run.');
-            throw new Error('Download required');
-        }
-        
-        if (nanoResult?.success) {
-          console.log(`✅ OTP found via GEMINI NANO (confidence: ${nanoResult.confidence})`);
-          await this.storeOTPResult(nanoResult);
-          sendResponse(nanoResult);
-          this.notifyPopupOfUpdate();
-          return;
-        }
-
-        console.log('⚠️ Nano failed or returned low confidence, moving to Tier 3...');
-        
-      } catch (error) {
-        console.error('⚠️ Gemini Nano EXCEPTION:', error);
-        console.log('Moving to Tier 3 (Cloud API)...');
-      }
-
-      // ============================================
-      // TIER 3: GEMINI API (CLOUD FALLBACK)
-      // ============================================
-      console.log('3️⃣ Tier 3: Trying Gemini API (cloud)...');
-      
-      try {
-        const apiResult = await this.aiService.extractOTP(emailContent, language);
-        console.log('✅ OTP found via GEMINI API (cloud)');
-        await this.storeOTPResult(apiResult);
-        sendResponse(apiResult);
-        this.notifyPopupOfUpdate();
-        return;
-        
-      } catch (error) {
-        console.error('❌ All three tiers failed');
-        sendResponse({ 
-          success: false, 
-          error: 'Failed to extract OTP. Please check manually.',
-          details: {
-            regex: `confidence ${regexResult.confidence}`,
-            nano: 'failed or unavailable',
-            api: error.message
-          }
-        });
-      }
-      
-    } catch (error) {
-      console.error('❌ OTP extraction error:', error);
-      sendResponse({ success: false, error: error.message });
+    // Tier 1: Regex - Fast and local
+    result = await this._tryRegex(emailContent, language);
+    if (result.success) {
+      console.log(`✅ OTP found via LOCAL REGEX (confidence: ${result.confidence})`);
+      await this.processSuccess(result);
+      return sendResponse(result);
     }
+
+    // Tier 2: Gemini Nano - Private and on-device AI
+    result = await this._tryNano(emailContent, language);
+    if (result.success) {
+      console.log(`✅ OTP found via GEMINI NANO (confidence: ${result.confidence})`);
+      await this.processSuccess(result);
+      return sendResponse(result);
+    }
+    
+    // Tier 3: Gemini API - Powerful cloud fallback
+    result = await this._tryApi(emailContent, language);
+    if (result.success) {
+      console.log(`✅ OTP found via GEMINI API (cloud)`);
+      await this.processSuccess(result);
+      return sendResponse(result);
+    }
+
+    console.error('❌ All three tiers failed to extract OTP.');
+    sendResponse({ success: false, error: 'All extraction methods failed.' });
+  }
+
+  async _tryRegex(content, language) {
+    console.log('1️⃣ Tier 1: Trying local regex...');
+    const result = await this.otpEngine.extractOTP(content, language);
+    if (result.success && result.confidence > 0.5) {
+      return result;
+    }
+    console.log(`⚠️ Regex confidence low (${result.confidence}), moving to next tier.`);
+    return { success: false };
+  }
+
+  async _tryNano(content, language) {
+    console.log('2️⃣ Tier 2: Trying Gemini Nano...');
+    try {
+      const nanoResult = await this.callOffscreenNano({
+        action: CONFIG.ACTIONS.OFFSCREEN_EXTRACT_OTP,
+        emailContent: content,
+        language
+      });
+      console.log('📥 Nano returned:', JSON.stringify(nanoResult));
+      if (nanoResult?.success) {
+        return nanoResult;
+      }
+    } catch (error) {
+      console.error('⚠️ Gemini Nano EXCEPTION:', error.message);
+    }
+    console.log('⚠️ Nano failed or unconfident, moving to next tier.');
+    return { success: false };
+  }
+
+  async _tryApi(content, language) {
+    console.log('3️⃣ Tier 3: Trying Gemini API (cloud)...');
+    try {
+      const apiResult = await this.aiService.extractOTP(content, language);
+      if (apiResult.success) {
+        return apiResult;
+      }
+    } catch (error) {
+      console.error('⚠️ Gemini API EXCEPTION:', error.message);
+    }
+    return { success: false };
   }
 
   /**
-   * Store OTP result with extraction method
+   * Centralized success handler.
+   */
+  async processSuccess(result) {
+    await this.storeOTPResult(result);
+    this.notifyPopupOfUpdate();
+    this.requestAutofill(result.otp);
+  }
+  
+  /**
+   * Detects language from text content.
+   */
+  detectLanguage(text) {
+    // Basic language detection, can be expanded
+    if (/[\u4e00-\u9fa5]/.test(text)) return 'zh';
+    if (/[ñáéíóúü]/.test(text)) return 'es';
+    if (/[àèéìíòóù]/.test(text)) return 'it';
+    return 'en';
+  }
+
+  /**
+   * Store OTP result and notify UI components.
    */
   async storeOTPResult(result) {
     if (result.success && result.otp) {
@@ -187,6 +180,28 @@ class BackgroundService {
           confidence: result.confidence
         }
       });
+    }
+  }
+
+  /**
+   * Request the content script to perform autofill.
+   */
+  async requestAutofill(otp) {
+    try {
+      const [tab] = await chrome.tabs.query({
+        active: true,
+        url: "*://mail.google.com/*"
+      });
+
+      if (tab) {
+        await chrome.tabs.sendMessage(tab.id, {
+          action: CONFIG.ACTIONS.FILL_OTP,
+          otp: otp
+        });
+        console.log(`📬 Sent autofill request for OTP: ${otp} to tab ${tab.id}`);
+      }
+    } catch (error) {
+      console.error(' Autofill request failed:', error.message);
     }
   }
 
@@ -220,8 +235,6 @@ class BackgroundService {
           reasons: [chrome.offscreen.Reason.IFRAME_SCRIPTING],
           justification: 'Required for Gemini Nano execution (needs window context)'
         });
-        
-        this.offscreenCreated = true;
         
         // Wait for initialization
         await new Promise(resolve => setTimeout(resolve, CONFIG.OFFSCREEN.INIT_DELAY));
@@ -293,10 +306,9 @@ class BackgroundService {
    * Cleanup offscreen document when needed
    */
   async cleanupOffscreen() {
-    if (this.offscreenCreated && chrome.offscreen) {
+    if (chrome.offscreen && await chrome.offscreen.hasDocument()) {
       try {
         await chrome.offscreen.closeDocument();
-        this.offscreenCreated = false;
         console.log('🗑️ Offscreen document closed');
       } catch (error) {
         console.warn('Failed to close offscreen document:', error);

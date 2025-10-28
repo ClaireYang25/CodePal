@@ -277,18 +277,6 @@ class PopupController {
         }
     }
     
-    sendMessage(message) {
-        return new Promise((resolve, reject) => {
-            chrome.runtime.sendMessage(message, (response) => {
-                if (chrome.runtime.lastError) {
-                    reject(chrome.runtime.lastError);
-                } else {
-                    resolve(response);
-                }
-            });
-        });
-    }
-
     formatTimeAgo(timestamp) {
         const now = Date.now();
         const seconds = Math.floor((now - timestamp) / 1000);

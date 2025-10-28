@@ -29,17 +29,7 @@ async function initializeNano() {
     };
     const availability = await globalThis.LanguageModel.availability(availabilityOpts);
     console.log('📊 Gemini Nano availability:', availability);
-    console.log('📊 availability typeof:', typeof availability);
-    console.log('📊 availability toString:', String(availability));
-    console.log('📊 availability lower:', String(availability).toLowerCase());
-    try {
-      const params = await globalThis.LanguageModel.params?.();
-      if (params) console.log('⚙️ LanguageModel.params:', params);
-    } catch (e) {
-      console.log('⚠️ Unable to read LanguageModel.params():', e?.message || e);
-    }
-    console.log('👆 navigator.userActivation.isActive:', !!(navigator.userActivation && navigator.userActivation.isActive));
-    
+
     const availabilityLower = String(availability).toLowerCase();
 
     // Handle 'no' or 'unavailable' status

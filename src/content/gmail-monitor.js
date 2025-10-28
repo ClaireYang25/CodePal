@@ -1,394 +1,129 @@
 /**
  * Gmail OTP AutoFill - Content Script
- * Monitors Gmail page for email changes, extracts and auto-fills OTP
+ * Monitors Gmail page for new emails and sends their content to the service worker.
+ * Its a single-responsibility script: Watch DOM -> Extract Raw Text -> Send to Background.
  */
 
-// Inline constants for content script (cannot use ES modules)
-const CONFIG = {
-  LANGUAGES: {
-    CHINESE: 'zh',
-    ENGLISH: 'en',
-    SPANISH: 'es',
-    ITALIAN: 'it',
-    AUTO: 'auto'
-  },
-  ACTIONS: {
-    EXTRACT_OTP: 'extractOTP',
-    FILL_OTP: 'fillOTP'
-  },
-  STORAGE_KEYS: {
-    LATEST_OTP: 'latestOTP'
-  },
-  OTP: {
-    EXPIRY_TIME: 5 * 60 * 1000,
-    CONTEXT_LENGTH: 200
-  },
-  GMAIL_SELECTORS: {
-    MAIN_CONTAINER: '[role="main"]',
-    THREAD: '[data-thread-id]',
-    MESSAGE_ID: '[data-message-id]',
-    EMAIL_PREVIEW: '.y2',
-    EMAIL_BODY: '.yP',
-    THREAD_SNIPPET: '.thread-snippet'
-  },
-  OTP_KEYWORDS: [
-    'otp', 'verification', 'code', 'token', 'pin',
-    'verify', 'auth', 'security', 'confirm'
-  ],
-  DELAYS: {
-    EMAIL_CHANGE: 1000,
-    EMAIL_CLICK: 1000
-  },
-  UI: {
-    NOTIFICATION: {
-      DURATION: 3000,
-      POSITION: { top: '20px', right: '20px' }
+class GmailContentMonitor {
+    constructor() {
+        this.selectors = {
+            mainContainer: '[role="main"]',
+            emailThread: '[data-thread-id]',
+            emailBody: '.adn.ads' // A more specific and stable selector for the main body
+        };
+        this.processedEmailIds = new Set();
+        this.observer = null;
+        this.init();
     }
-  }
-};
 
-class GmailMonitor {
-  constructor() {
-    this.lastProcessedEmails = new Set();
-    this.init();
-  }
-
-  async init() {
-    try {
-      await this.waitForGmailLoad();
-      this.setupEmailListeners();
-      this.setupAutoFillListeners();
-      console.log('✅ Gmail monitor initialized');
-      
-      // Process currently visible emails
-      this.processCurrentEmails();
-    } catch (error) {
-      console.error('❌ Content script initialization failed:', error);
-    }
-  }
-
-  /**
-   * Wait for Gmail page to load completely
-   */
-  async waitForGmailLoad() {
-    return new Promise((resolve) => {
-      const checkGmail = () => {
-        if (document.querySelector(CONFIG.GMAIL_SELECTORS.MAIN_CONTAINER) && 
-            document.querySelector(CONFIG.GMAIL_SELECTORS.THREAD)) {
-          resolve();
-        } else {
-          setTimeout(checkGmail, 500);
+    async init() {
+        try {
+            await this.waitForElement(this.selectors.mainContainer);
+            console.log('✅ Gmail monitor initialized');
+            this.startObserver();
+            this.listenForAutofillRequests();
+            // Initial scan for any emails already on the page
+            this.scanForNewEmails();
+        } catch (error) {
+            console.error('❌ Content script initialization failed:', error);
         }
-      };
-      checkGmail();
-    });
-  }
+    }
 
-  /**
-   * Setup email listeners
-   */
-  setupEmailListeners() {
-    const emailContainer = document.querySelector(CONFIG.GMAIL_SELECTORS.MAIN_CONTAINER);
-    if (!emailContainer) return;
+    waitForElement(selector) {
+        return new Promise((resolve) => {
+            const interval = setInterval(() => {
+                const element = document.querySelector(selector);
+                if (element) {
+                    clearInterval(interval);
+                    resolve(element);
+                }
+            }, 500);
+        });
+    }
 
-    // Monitor DOM changes
-    const observer = new MutationObserver((mutations) => {
-      mutations.forEach((mutation) => {
-        if (mutation.type === 'childList') {
-          this.handleEmailListChange();
+    startObserver() {
+        const targetNode = document.querySelector(this.selectors.mainContainer);
+        if (!targetNode) return;
+
+        this.observer = new MutationObserver((mutations) => {
+            // A simple debounce to avoid rapid-fire scans
+            clearTimeout(this.scanTimeout);
+            this.scanTimeout = setTimeout(() => this.scanForNewEmails(mutations), 500);
+        });
+
+        this.observer.observe(targetNode, {
+            childList: true,
+            subtree: true
+        });
+    }
+
+    scanForNewEmails(mutations = []) {
+        const emailBodies = document.querySelectorAll(this.selectors.emailBody);
+
+        for (const emailBody of emailBodies) {
+            // Find the closest parent with a message ID to use as a unique identifier
+            const messageContainer = emailBody.closest('[data-message-id]');
+            if (!messageContainer) continue;
+
+            const messageId = messageContainer.getAttribute('data-message-id');
+            if (this.processedEmailIds.has(messageId)) {
+                continue;
+            }
+
+            const content = emailBody.textContent || '';
+            if (content.trim().length > 10) {
+                console.log(`💌 New email detected (ID: ${messageId}), sending to service worker...`);
+                chrome.runtime.sendMessage({
+                    action: 'extractOTP',
+                    emailContent: content
+                }).catch(err => console.error("Message sending failed:", err));
+                this.processedEmailIds.add(messageId);
+            }
         }
-      });
-    });
-    
-    observer.observe(emailContainer, {
-      childList: true,
-      subtree: true
-    });
-
-    // Monitor email clicks
-    document.addEventListener('click', (event) => {
-      const emailElement = event.target.closest(CONFIG.GMAIL_SELECTORS.THREAD);
-      if (emailElement) {
-        setTimeout(() => this.processEmailElement(emailElement), CONFIG.DELAYS.EMAIL_CLICK);
-      }
-    });
-  }
-
-  /**
-   * Setup auto-fill listeners
-   */
-  setupAutoFillListeners() {
-    // Listen for fill requests from background
-    chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
-      if (request.action === CONFIG.ACTIONS.FILL_OTP) {
-        this.fillOTPInCurrentPage(request.otp);
-        sendResponse({ success: true });
-      }
-    });
-
-    // Listen for input field focus events
-    document.addEventListener('focusin', (event) => {
-      if (this.isOTPInputField(event.target)) {
-        this.handleOTPInputFocus(event.target);
-      }
-    });
-  }
-
-  /**
-   * Handle email list changes (debounced)
-   */
-  handleEmailListChange() {
-    clearTimeout(this.emailChangeTimeout);
-    this.emailChangeTimeout = setTimeout(() => {
-      this.processCurrentEmails();
-    }, CONFIG.DELAYS.EMAIL_CHANGE);
-  }
-
-  /**
-   * Process all current emails
-   */
-  async processCurrentEmails() {
-    const emailElements = document.querySelectorAll(CONFIG.GMAIL_SELECTORS.THREAD);
-    
-    for (const emailElement of emailElements) {
-      const threadId = emailElement.getAttribute('data-thread-id');
-      
-      if (!this.lastProcessedEmails.has(threadId)) {
-        await this.processEmailElement(emailElement);
-        this.lastProcessedEmails.add(threadId);
-      }
-    }
-  }
-
-  /**
-   * Process a single email element
-   */
-  async processEmailElement(emailElement) {
-    try {
-      const emailContent = this.extractEmailContent(emailElement);
-      if (!emailContent || emailContent.length < 10) return;
-
-      const language = this.detectLanguage(emailContent);
-      const otpResult = await this.extractOTP(emailContent, language);
-      
-      if (otpResult.success && otpResult.otp) {
-        await this.storeOTP(otpResult.otp, emailContent);
-        this.showOTPNotification(otpResult.otp);
-      }
-    } catch (error) {
-      console.error('Failed to process email:', error);
-    }
-  }
-
-  /**
-   * Extract email content from element
-   */
-  extractEmailContent(emailElement) {
-    const selectors = Object.values(CONFIG.GMAIL_SELECTORS).filter(s => 
-      s !== CONFIG.GMAIL_SELECTORS.MAIN_CONTAINER && s !== CONFIG.GMAIL_SELECTORS.THREAD
-    );
-
-    for (const selector of selectors) {
-      const element = emailElement.querySelector(selector);
-      if (element?.textContent.trim()) {
-        return element.textContent.trim();
-      }
     }
 
-    return emailElement.textContent.trim();
-  }
-
-  /**
-   * Detect language from text
-   */
-  detectLanguage(text) {
-    const patterns = {
-      [CONFIG.LANGUAGES.CHINESE]: /[\u4e00-\u9fff]/,
-      [CONFIG.LANGUAGES.SPANISH]: /[ñáéíóúü]/i,
-      [CONFIG.LANGUAGES.ITALIAN]: /[àèéìíîòóù]/i
-    };
-
-    for (const [lang, pattern] of Object.entries(patterns)) {
-      if (pattern.test(text)) return lang;
-    }
-    
-    return CONFIG.LANGUAGES.ENGLISH;
-  }
-
-  /**
-   * Extract OTP (via background script)
-   */
-  async extractOTP(content, language) {
-    // Extra validation to prevent empty content
-    if (!content || content.trim().length < 10) {
-      console.warn('⚠️ Content too short, skipping OTP extraction');
-      return { success: false, error: 'Content too short' };
+    listenForAutofillRequests() {
+        chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
+            if (request.action === 'fillOTP' && request.otp) {
+                this.fillOtpInPage(request.otp);
+                sendResponse({ success: true });
+            }
+            // Return false as we are not responding asynchronously in all cases
+            return true;
+        });
     }
 
-    return new Promise((resolve) => {
-      chrome.runtime.sendMessage({
-        action: CONFIG.ACTIONS.EXTRACT_OTP,
-        emailContent: content,
-        language: language
-      }, (response) => {
-        if (chrome.runtime.lastError) {
-          console.error("Error:", chrome.runtime.lastError.message);
-          resolve({ success: false, error: chrome.runtime.lastError.message });
-        } else {
-          resolve(response || { success: false });
+    fillOtpInPage(otp) {
+        // Broad search for potential OTP inputs across the entire document
+        const inputs = document.querySelectorAll('input[type="text"], input[type="number"], input[type="tel"]');
+        const otpKeywords = ['otp', 'verification', 'code', 'token', 'pin', 'auth'];
+
+        for (const input of inputs) {
+            const id = (input.id || '').toLowerCase();
+            const name = (input.name || '').toLowerCase();
+            const placeholder = (input.placeholder || '').toLowerCase();
+            const ariaLabel = (input.getAttribute('aria-label') || '').toLowerCase();
+            
+            const isOtpInput = otpKeywords.some(keyword => 
+                id.includes(keyword) ||
+                name.includes(keyword) ||
+                placeholder.includes(keyword) ||
+                ariaLabel.includes(keyword)
+            );
+
+            if (isOtpInput && !input.value) {
+                console.log(`🖋️ Found OTP input field, filling with: ${otp}`);
+                input.value = otp;
+                // Dispatch events to simulate manual input, helping frameworks like React detect the change
+                input.dispatchEvent(new Event('input', { bubbles: true }));
+                input.dispatchEvent(new Event('change', { bubbles: true }));
+                return; // Stop after filling the first found field
+            }
         }
-      });
-    });
-  }
-
-  /**
-   * Store OTP in local storage
-   */
-  async storeOTP(otp, context) {
-    const otpData = {
-      otp: otp,
-      timestamp: Date.now(),
-      context: context.substring(0, CONFIG.OTP.CONTEXT_LENGTH),
-      source: 'gmail'
-    };
-
-    return new Promise((resolve) => {
-      chrome.storage.local.set({ 
-        [CONFIG.STORAGE_KEYS.LATEST_OTP]: otpData,
-        [`otp_${Date.now()}`]: otpData 
-      }, resolve);
-    });
-  }
-
-  /**
-   * Show OTP notification with modern UI
-   */
-  showOTPNotification(otp) {
-    const notification = document.createElement('div');
-    notification.innerHTML = `
-      <div style="display: flex; align-items: center; gap: 10px;">
-        <strong>OTP Identified:</strong> 
-        <span style="font-size: 18px; font-weight: bold;">${otp}</span>
-        <button class="copy-otp" data-otp="${otp}" style="
-          padding: 5px 10px;
-          background: white;
-          border: 1px solid rgba(255,255,255,0.3);
-          border-radius: 4px;
-          cursor: pointer;
-          color: #4CAF50;
-        ">Copy</button>
-      </div>
-    `;
-
-    notification.style.cssText = `
-      position: fixed;
-      top: ${CONFIG.UI.NOTIFICATION.POSITION.top};
-      right: ${CONFIG.UI.NOTIFICATION.POSITION.right};
-      background: linear-gradient(135deg, #4CAF50, #45a049);
-      color: white;
-      padding: 15px 20px;
-      border-radius: 8px;
-      box-shadow: 0 4px 12px rgba(0,0,0,0.3);
-      z-index: 10000;
-      font-family: Arial, sans-serif;
-      max-width: 350px;
-      animation: slideIn 0.3s ease-out;
-    `;
-
-    // Add animation styles if not already present
-    if (!document.querySelector('#otp-notification-styles')) {
-      const style = document.createElement('style');
-      style.id = 'otp-notification-styles';
-      style.textContent = `
-        @keyframes slideIn {
-          from { transform: translateX(400px); opacity: 0; }
-          to { transform: translateX(0); opacity: 1; }
-        }
-      `;
-      document.head.appendChild(style);
     }
-
-    // Copy functionality
-    notification.querySelector('.copy-otp').addEventListener('click', (e) => {
-      navigator.clipboard.writeText(e.target.dataset.otp);
-      e.target.textContent = '✓ Copied';
-      setTimeout(() => e.target.textContent = 'Copy', 2000);
-    });
-
-    document.body.appendChild(notification);
-
-    // Auto-remove after duration
-    setTimeout(() => {
-      notification.style.animation = 'slideOut 0.3s ease-in forwards';
-      setTimeout(() => notification.remove(), 300);
-    }, CONFIG.UI.NOTIFICATION.DURATION);
-  }
-
-  /**
-   * Check if element is an OTP input field
-   */
-  isOTPInputField(element) {
-    if (!element || element.tagName !== 'INPUT') return false;
-    
-    const attributes = [
-      element.name?.toLowerCase(),
-      element.id?.toLowerCase(),
-      element.placeholder?.toLowerCase(),
-      element.className?.toLowerCase()
-    ].filter(Boolean);
-
-    return CONFIG.OTP_KEYWORDS.some(keyword => 
-      attributes.some(attr => attr.includes(keyword))
-    );
-  }
-
-  /**
-   * Handle OTP input field focus
-   */
-  async handleOTPInputFocus(inputElement) {
-    const latestOTP = await this.getLatestOTP();
-    
-    if (latestOTP && this.isRecentOTP(latestOTP.timestamp)) {
-      inputElement.value = latestOTP.otp;
-      inputElement.dispatchEvent(new Event('input', { bubbles: true }));
-      inputElement.dispatchEvent(new Event('change', { bubbles: true }));
-    }
-  }
-
-  /**
-   * Get latest OTP from storage
-   */
-  async getLatestOTP() {
-    return new Promise((resolve) => {
-      chrome.storage.local.get([CONFIG.STORAGE_KEYS.LATEST_OTP], (result) => {
-        resolve(result[CONFIG.STORAGE_KEYS.LATEST_OTP]);
-      });
-    });
-  }
-
-  /**
-   * Check if OTP is within expiry time
-   */
-  isRecentOTP(timestamp) {
-    return (Date.now() - timestamp) < CONFIG.OTP.EXPIRY_TIME;
-  }
-
-  /**
-   * Fill OTP in current page
-   */
-  fillOTPInCurrentPage(otp) {
-    const otpInputs = document.querySelectorAll('input');
-    
-    for (const input of otpInputs) {
-      if (this.isOTPInputField(input) && !input.value) {
-        input.value = otp;
-        input.dispatchEvent(new Event('input', { bubbles: true }));
-        input.dispatchEvent(new Event('change', { bubbles: true }));
-        break;
-      }
-    }
-  }
 }
 
-// Initialize Gmail monitor
-new GmailMonitor();
+// Ensure the script runs only once
+if (typeof window.gmailMonitor === 'undefined') {
+    window.gmailMonitor = new GmailContentMonitor();
+}

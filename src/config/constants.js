@@ -10,14 +10,9 @@ export const CONFIG = {
   
   // Storage keys
   STORAGE_KEYS: {
-    GMAIL_TOKEN: 'gmailToken',
     GEMINI_API_KEY: 'geminiApiKey',
     LATEST_OTP: 'latestOTP',
-    POPUP_SETTINGS: 'popupSettings',
-    AI_USAGE_STATS: 'aiUsageStats',
-    NANO_DOWNLOAD_STATE: 'nanoDownloadState',
-    NANO_DOWNLOAD_STARTED_AT: 'nanoDownloadStartedAt',
-    NANO_DOWNLOAD_PROGRESS: 'nanoDownloadProgress'
+    POPUP_SETTINGS: 'popupSettings'
   },
   
   // API Configuration
@@ -31,10 +26,6 @@ export const CONFIG = {
       TOP_K: 1,
       TOP_P: 0.8,
       MAX_OUTPUT_TOKENS: 500
-    },
-    GMAIL: {
-      BASE_URL: 'https://gmail.googleapis.com/gmail/v1',
-      DEFAULT_LIMIT: 10
     }
   },
   
@@ -77,6 +68,7 @@ export const CONFIG = {
   // Action Types for Message Passing
   ACTIONS: {
     EXTRACT_OTP: 'extractOTP',
+    FILL_OTP: 'fillOTP', // Added for autofill requests
     TEST_GEMINI_NANO: 'testGeminiNano',
     TEST_GEMINI_API: 'testGeminiAPI',
     OFFSCREEN_EXTRACT_OTP: 'offscreen-extractOTP',
@@ -91,30 +83,7 @@ export const CONFIG = {
       es: 'This is a Spanish email, identify "código de verificación".',
       it: 'This is an Italian email, identify "codice di verifica".',
       auto: 'Auto-detect the language and identify the verification code.'
-    },
-    TEST_CONNECTION: 'Please respond with "Connection successful"'
-  },
-  
-  // Gmail Selectors (for content script)
-  GMAIL_SELECTORS: {
-    MAIN_CONTAINER: '[role="main"]',
-    THREAD: '[data-thread-id]',
-    MESSAGE_ID: '[data-message-id]',
-    EMAIL_PREVIEW: '.y2',
-    EMAIL_BODY: '.yP',
-    THREAD_SNIPPET: '.thread-snippet'
-  },
-  
-  // OTP Input Field Keywords
-  OTP_KEYWORDS: [
-    'otp', 'verification', 'code', 'token', 'pin',
-    'verify', 'auth', 'security', 'confirm'
-  ],
-  
-  // Debounce Delays
-  DELAYS: {
-    EMAIL_CHANGE: 1000,
-    EMAIL_CLICK: 1000
+    }
   }
 };
 
@@ -149,14 +118,5 @@ Rules:
 3. Return JSON only, no other content
 
 JSON:`;
-}
-
-/**
- * Get language instruction for a specific language
- * @param {string} language - Language code
- * @returns {string} Instruction text
- */
-export function getLanguageInstruction(language) {
-  return CONFIG.PROMPTS.INSTRUCTIONS[language] || CONFIG.PROMPTS.INSTRUCTIONS.auto;
 }
 
