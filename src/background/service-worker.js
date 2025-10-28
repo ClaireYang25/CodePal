@@ -33,6 +33,11 @@ class BackgroundService {
    */
   setupMessageListeners() {
     chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
+      // Ignore messages meant for offscreen document
+      if (request.target === 'offscreen') {
+        return false; // Not handling this message
+      }
+      
       this.handleMessage(request, sender, sendResponse);
       return true; // Keep message channel open for async
     });
@@ -43,10 +48,6 @@ class BackgroundService {
    */
   async handleMessage(request, sender, sendResponse) {
     try {
-      // Ignore messages meant for offscreen document
-      if (request.target === 'offscreen') {
-        return;
-      }
 
       const handlers = {
         [CONFIG.ACTIONS.EXTRACT_OTP]: () => this.handleExtractOTP(request, sendResponse),

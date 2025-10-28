@@ -236,6 +236,13 @@ function destroyNano() {
  * Message listener - handles requests from Service Worker
  */
 chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
+  // Only process messages targeted to offscreen
+  if (request.target !== 'offscreen') {
+    // Don't return true - we're not handling this message
+    return false;
+  }
+  
+  // Handle the message asynchronously
   handleMessage(request, sendResponse);
   return true; // Keep channel open for async response
 });
@@ -246,12 +253,6 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
 async function handleMessage(request, sendResponse) {
   try {
     console.log('📬 Offscreen received message:', JSON.stringify(request, null, 2));
-    
-    // Only process messages targeted to offscreen
-    if (request.target !== 'offscreen') {
-      console.log('⏭️ Message not for offscreen, ignoring');
-      return;
-    }
     
     const { action } = request;
 
