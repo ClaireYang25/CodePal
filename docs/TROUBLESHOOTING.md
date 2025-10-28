@@ -81,6 +81,52 @@
 - **原因**: 在 `LanguageModel.create()` 的 `monitor` 回调中使用了普通函数 `function(m){...}`，导致 `this` 的上下文改变，不再指向 `PopupController` 的实例。
 - **解决方案**: 将回调函数改为**箭头函数** `monitor: (m) => { ... }`，箭头函数不会创建自己的 `this` 上下文，因此可以正确地从父作用域捕获并使用 `PopupController` 的实例。
 
+### 问题 13: [消息通道] `A listener indicated an asynchronous response...`
+- **背景**: 在实际测试三层引擎时，发现大量的消息通道错误。
+- **现象**: 控制台频繁报错 `Error: A listener indicated an asynchronous response by returning true, but the message channel closed before a response was received`。
+- **原因**: **关键的架构缺陷**。`offscreen.js` 和 `service-worker.js` 的消息监听器都返回了 `true`（表示会异步响应），但在检查 `target` 属性发现消息不属于自己后，直接 `return` 而没有调用 `sendResponse()`，导致消息通道永久挂起。
+- **解决方案**: 
+  - **立即返回 `false`**：当检测到消息的 `target` 不匹配时，立即 `return false`，告诉 Chrome 这个监听器不会处理此消息。
+  - **只在真正处理时返回 `true`**：只有当确认要处理消息时，才 `return true` 并调用异步处理函数。
+  ```javascript
+  // 修复前（错误）
+  chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
+    handleMessage(request, sendResponse);
+    return true; // 总是返回 true，即使不处理
+  });
+  
+  // 修复后（正确）
+  chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
+    if (request.target !== 'offscreen') {
+      return false; // 不处理，立即返回 false
+    }
+    handleMessage(request, sendResponse);
+    return true; // 只有在处理时才返回 true
+  });
+  ```
+
+### 问题 14: [正则引擎] 简单 OTP 无法识别 - "Your verification code is: 123456"
+- **背景**: 在端到端测试中，发送简单的英文 OTP 邮件竟然无法识别。
+- **现象**: 
+  - 测试文本 "Your verification code is: 123456" 置信度为 0
+  - 正则引擎完全无法提取此 OTP
+- **综合原因**:
+  1. **过度清理**：`cleanContent()` 函数使用 `/[^\w\s\d：:]/g` 移除了所有标点符号，包括英文冒号 `:`，导致 "code: 123456" 变成了 "code 123456"，而正则表达式需要冒号才能匹配。
+  2. **正则过于严格**：英文规则的正则表达式如 `/verification code is[：:]\s*(\d{4,8})/i` 无法匹配 "Your verification code is:"，因为前面多了 "Your"。
+- **解决方案**: 
+  1. **简化内容清理**：只保留必要的空格规范化，不再移除标点符号。
+  2. **增强正则灵活性**：
+     - 使用 `\s*[：:is\s]+` 代替严格的 `[：:]`，可以匹配 "code:", "code is", "code  " 等各种变体
+     - 添加 `your\s+(?:verification\s+)?code` 来匹配 "Your code" 和 "Your verification code"
+     - 增加 `security code` 等常见模式
+  ```javascript
+  // 修复前
+  /verification code is[：:]\s*(\d{4,8})/i  // 无法匹配 "Your verification code is: 123456"
+  
+  // 修复后
+  /your\s+(?:verification\s+)?code\s*[：:is\s]+(\d{4,8})/i  // ✅ 可以匹配
+  ```
+
 ---
 
 ## 🛠️ 调试技巧
