@@ -226,15 +226,19 @@ function destroyNano() {
  * Message listener - handles requests from Service Worker
  */
 chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
-  // Only process messages targeted to offscreen
   if (request.target !== 'offscreen') {
-    // Don't return true - we're not handling this message
     return false;
   }
-  
-  // Handle the message asynchronously
-  handleMessage(request, sendResponse);
-  return true; // Keep channel open for async response
+
+  Promise.resolve(handleMessage(request, sendResponse)).catch(error => {
+    console.error('❌ Offscreen unhandled error:', error);
+    try {
+      sendResponse({ success: false, error: error.message });
+    } catch (_) {
+      // channel already closed
+    }
+  });
+  return true;
 });
 
 /**
