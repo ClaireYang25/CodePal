@@ -15,9 +15,10 @@ class GmailContentMonitor {
             sender: '.yX.xY .yW span, .yX.xY span[email]',
             timestamp: '.xW.xY span'
         };
-        this.processedStorageKey = 'processedMessageIds';
-        this.maxProcessedEntries = 200;
         this.processedMessageKeys = new Set();
+        this.maxProcessedEntries = 200;
+        this.pollIntervalMs = 7000;
+        this.pollTimer = null;
         this.otpKeywordPattern = /(验证码|驗證|認證|otp|one-time|verification code|security code|auth code|passcode|pin|kode verifikasi|codigo)/i;
         this.observer = null;
         this.init();
@@ -26,11 +27,11 @@ class GmailContentMonitor {
     async init() {
         try {
             await this.waitForElement(this.selectors.mainContainer);
-            await this.loadProcessedKeys();
             console.log('✅ Gmail monitor initialized');
             this.startObserver();
             this.attachClickHandler();
             this.listenForAutofillRequests();
+            this.setupPolling();
             this.scanThreadList();
         } catch (error) {
             console.error('❌ Content script initialization failed:', error);
@@ -49,42 +50,19 @@ class GmailContentMonitor {
         });
     }
 
-    async loadProcessedKeys() {
-        try {
-            const result = await chrome.storage.local.get([this.processedStorageKey]);
-            const entries = Array.isArray(result[this.processedStorageKey]) ? result[this.processedStorageKey] : [];
-            entries.forEach((key) => {
-                if (typeof key === 'string' && key) this.processedMessageKeys.add(key);
-            });
-        } catch (error) {
-            console.warn('⚠️ Failed to load processed keys:', error);
-        }
-    }
-
-    persistProcessedKeys() {
-        const entries = Array.from(this.processedMessageKeys);
-        const trimmed = entries.length > this.maxProcessedEntries
-            ? entries.slice(entries.length - this.maxProcessedEntries)
-            : entries;
-        this.processedMessageKeys = new Set(trimmed);
-
-        if (!chrome.runtime?.id) {
-            console.warn('⚠️ Skip persisting processed keys: extension context invalidated.');
-            return;
-        }
-
-        chrome.storage.local.set({ [this.processedStorageKey]: trimmed }, () => {
-            const err = chrome.runtime?.lastError;
-            if (err && !/Extension context invalidated/i.test(err.message)) {
-                console.warn('⚠️ Failed to persist processed keys:', err.message);
-            }
-        });
-    }
-
     addProcessedKey(key) {
         if (!key || typeof key !== 'string') return;
         this.processedMessageKeys.add(key);
-        this.persistProcessedKeys();
+        if (this.processedMessageKeys.size > this.maxProcessedEntries) {
+            const excess = this.processedMessageKeys.size - this.maxProcessedEntries;
+            const iterator = this.processedMessageKeys.values();
+            for (let i = 0; i < excess; i += 1) {
+                const value = iterator.next().value;
+                if (value) {
+                    this.processedMessageKeys.delete(value);
+                }
+            }
+        }
     }
 
     startObserver() {
@@ -128,6 +106,24 @@ class GmailContentMonitor {
             this.sendForExtraction(contentForExtraction, meta.payload);
             if (dedupeKey) this.addProcessedKey(dedupeKey);
         }
+    }
+
+    setupPolling() {
+        if (this.pollTimer !== null) return;
+        this.pollTimer = setInterval(() => {
+            try {
+                this.scanThreadList();
+            } catch (error) {
+                console.warn('⚠️ Poll scan failed:', error);
+            }
+        }, this.pollIntervalMs);
+
+        window.addEventListener('unload', () => {
+            if (this.pollTimer !== null) {
+                clearInterval(this.pollTimer);
+                this.pollTimer = null;
+            }
+        });
     }
 
     extractTimestamp(threadNode) {
