@@ -11,7 +11,9 @@ class GmailContentMonitor {
             threadRow: '.zA', // Gmail thread row
             threadItem: '[data-thread-id]',
             snippet: '.y2',
-            subject: '.y6 .bog'
+            subject: '.y6 .bog',
+            sender: '.yX.xY .yW span, .yX.xY span[email]',
+            timestamp: '.xW.xY span'
         };
         this.processedStorageKey = 'processedMessageIds';
         this.maxProcessedEntries = 200;
@@ -65,9 +67,16 @@ class GmailContentMonitor {
             ? entries.slice(entries.length - this.maxProcessedEntries)
             : entries;
         this.processedMessageKeys = new Set(trimmed);
-        chrome.storage.local.set({ [this.processedStorageKey]: trimmed }).catch(() => {
-            // Ignore storage errors (quota, etc.)
-        });
+        try {
+            chrome.storage.local.set({ [this.processedStorageKey]: trimmed }, () => {
+                const err = chrome.runtime?.lastError;
+                if (err) {
+                    console.warn('⚠️ Failed to persist processed keys:', err.message);
+                }
+            });
+        } catch (error) {
+            console.warn('⚠️ Storage persistence error:', error);
+        }
     }
 
     addProcessedKey(key) {
@@ -104,33 +113,34 @@ class GmailContentMonitor {
                 || row.querySelector('[data-legacy-last-message-id]')?.getAttribute('data-legacy-last-message-id');
             const threadId = row.getAttribute('data-thread-id')
                 || row.querySelector(this.selectors.threadItem)?.getAttribute('data-thread-id');
-            const key = lastMsgId || threadId;
-            if (key && this.processedMessageKeys.has(key)) continue;
+            const receivedAt = this.extractTimestamp(row);
+            const dedupeKey = lastMsgId || (threadId ? `${threadId}__${receivedAt}` : null);
+            if (dedupeKey && this.processedMessageKeys.has(dedupeKey)) continue;
 
-            const meta = this.collectMeta(row, lastMsgId, threadId);
+            const meta = this.collectMeta(row, lastMsgId, threadId, receivedAt);
             const aggregatedText = meta.aggregateText;
             if (!aggregatedText || aggregatedText.length < 10) continue;
             if (!this.otpKeywordPattern.test(aggregatedText)) continue;
 
             const contentForExtraction = meta.ariaLabel || aggregatedText;
             this.sendForExtraction(contentForExtraction, meta.payload);
-            if (key) this.addProcessedKey(key);
+            if (dedupeKey) this.addProcessedKey(dedupeKey);
         }
     }
 
-    collectMeta(threadNode, messageId, threadId) {
+    extractTimestamp(threadNode) {
+        const tsNode = threadNode.querySelector(this.selectors.timestamp);
+        return tsNode?.getAttribute('title')?.trim() || tsNode?.textContent?.trim() || '';
+    }
+
+    collectMeta(threadNode, messageId, threadId, receivedAt) {
         const aria = (threadNode.getAttribute('aria-label') || '').trim();
         const snippet = (threadNode.querySelector(this.selectors.snippet)?.textContent || '').trim();
         const subject = (threadNode.querySelector(this.selectors.subject)?.textContent || '').trim();
-        const from = (threadNode.querySelector('.yX.xY .yW span')?.textContent
-            || threadNode.querySelector('.yX.xY span[email]')?.textContent
-            || '').trim();
-        const receivedAt = threadNode.querySelector('.xW.xY span')?.getAttribute('title')
-            || threadNode.querySelector('.xW.xY span')?.textContent?.trim()
-            || '';
+        const from = (threadNode.querySelector(this.selectors.sender)?.textContent || '').trim();
         const threadUrl = threadNode.querySelector('a')?.href || '';
 
-        const aggregate = [subject, snippet, aria].filter(Boolean).join(' ');
+        const aggregate = [subject, snippet, aria, from].filter(Boolean).join(' ');
 
         const payload = {
             from,
