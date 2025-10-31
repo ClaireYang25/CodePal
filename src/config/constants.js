@@ -72,7 +72,12 @@ export const CONFIG = {
     TEST_GEMINI_NANO: 'testGeminiNano',
     TEST_GEMINI_API: 'testGeminiAPI',
     OFFSCREEN_EXTRACT_OTP: 'offscreen-extractOTP',
-    OFFSCREEN_TEST_CONNECTION: 'offscreen-testConnection'
+    OFFSCREEN_TEST_CONNECTION: 'offscreen-testConnection',
+    OTP_INTENT_SIGNAL: 'otpIntentSignal'
+  },
+
+  HIGH_ALERT: {
+    WINDOW_MS: 2 * 60 * 1000 // stay in high-alert mode for 2 minutes
   },
   
   // Prompt Templates

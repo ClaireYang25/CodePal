@@ -24,6 +24,8 @@ class BackgroundService {
   constructor() {
     this.aiService = new AIService();
     this.otpEngine = new OTPEngine();
+    this.highAlertUntil = 0;
+    this.latestOtpIntent = null;
     this.init();
   }
 
@@ -61,7 +63,8 @@ class BackgroundService {
       const handlers = {
         [CONFIG.ACTIONS.EXTRACT_OTP]: () => this.handleExtractOTP(request, sendResponse),
         [CONFIG.ACTIONS.TEST_GEMINI_NANO]: () => this.handleTestGeminiNano(sendResponse),
-        [CONFIG.ACTIONS.TEST_GEMINI_API]: () => this.handleTestGeminiAPI(sendResponse)
+        [CONFIG.ACTIONS.TEST_GEMINI_API]: () => this.handleTestGeminiAPI(sendResponse),
+        [CONFIG.ACTIONS.OTP_INTENT_SIGNAL]: () => this.handleOtpIntentSignal(request, sendResponse)
       };
 
       const handler = handlers[request.action];
@@ -86,6 +89,9 @@ class BackgroundService {
     let result = { success: false, confidence: 0 };
 
     console.log(`🔍 Starting three-tier OTP extraction for email (lang: ${language})...`);
+    if (this.isHighAlertActive()) {
+      console.log('🚨 High-alert mode active (recent OTP intent detected).');
+    }
 
     // Tier 1: Regex - Fast and local
     result = await this._tryRegex(emailContent, language);
@@ -172,6 +178,10 @@ class BackgroundService {
     await this.storeOTPResult(result);
     this.notifyPopupOfUpdate();
     this.requestAutofill(result.otp);
+  }
+
+  isHighAlertActive() {
+    return Date.now() < this.highAlertUntil;
   }
   
   /**
@@ -320,6 +330,31 @@ class BackgroundService {
         success: false, 
         error: error.message 
       });
+    }
+  }
+
+  async handleOtpIntentSignal(request, sendResponse) {
+    try {
+      const now = Date.now();
+      this.highAlertUntil = now + CONFIG.HIGH_ALERT.WINDOW_MS;
+      this.latestOtpIntent = {
+        timestamp: now,
+        sourceUrl: request.sourceUrl,
+        hostname: request.hostname,
+        metadata: request.metadata || {}
+      };
+
+      await chrome.storage.local.set({
+        highAlertUntil: this.highAlertUntil,
+        latestOtpIntent: this.latestOtpIntent
+      });
+
+      const host = this.latestOtpIntent.hostname || 'unknown';
+      console.log(`🚨 OTP intent signal received from ${host}. High-alert until ${new Date(this.highAlertUntil).toLocaleTimeString()}`);
+      sendResponse({ success: true });
+    } catch (error) {
+      console.error('❌ Failed to process OTP intent signal:', error);
+      sendResponse({ success: false, error: error.message });
     }
   }
 

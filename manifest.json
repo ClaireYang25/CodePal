@@ -11,7 +11,9 @@
   ],
   
   "host_permissions": [
-    "https://mail.google.com/*"
+    "https://mail.google.com/*",
+    "https://*/*",
+    "http://*/*"
   ],
   
   "background": {
@@ -24,6 +26,11 @@
       "matches": ["https://mail.google.com/*"],
       "js": ["src/content/gmail-monitor.js"],
       "run_at": "document_end"
+    },
+    {
+      "matches": ["https://*/*", "http://*/*"],
+      "js": ["src/content/otp-intent-listener.js"],
+      "run_at": "document_idle"
     }
   ],
   
