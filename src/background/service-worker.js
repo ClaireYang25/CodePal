@@ -10,6 +10,16 @@ import { AIService } from '../services/ai-service.js';
 import { OTPEngine } from '../core/otp-engine.js';
 import { CONFIG } from '../config/constants.js';
 
+const POSITIVE_CONTEXT_KEYWORDS = [
+  'verification', '验证码', '安全码', '校验', 'otp', 'one-time', 'security code', 'auth', 'authentication', 'login code', 'passcode', 'pin',
+  '授权码', '动态码', '一次性密码', 'codigo', 'verificación', 'codice', 'verifica'
+];
+
+const NEGATIVE_CONTEXT_KEYWORDS = [
+  'booking', '订单', '预订', 'reservation', 'ticket', '票号', '航班', 'flight', 'itinerary', 'invoice', 'receipt', 'account number',
+  'reference number', 'tracking', 'shipment', 'order number', '订单号', '参考号', '交易号', '預訂', '发票'
+];
+
 class BackgroundService {
   constructor() {
     this.aiService = new AIService();
@@ -125,7 +135,11 @@ class BackgroundService {
       });
       console.log('📥 Nano returned:', JSON.stringify(nanoResult));
       if (nanoResult?.success) {
-        return nanoResult;
+        const enriched = { ...nanoResult, method: nanoResult.method || 'gemini-nano' };
+        if (this.validateAiResult(enriched, content)) {
+          return enriched;
+        }
+        console.warn('🚫 Gemini Nano result rejected by heuristics.');
       }
     } catch (error) {
       console.error('⚠️ Gemini Nano EXCEPTION:', error.message);
@@ -139,7 +153,11 @@ class BackgroundService {
     try {
       const apiResult = await this.aiService.extractOTP(content, language);
       if (apiResult.success) {
-        return apiResult;
+        const enriched = { ...apiResult, method: apiResult.method || 'gemini-api' };
+        if (this.validateAiResult(enriched, content)) {
+          return enriched;
+        }
+        console.warn('🚫 Gemini API result rejected by heuristics.');
       }
     } catch (error) {
       console.error('⚠️ Gemini API EXCEPTION:', error.message);
@@ -317,6 +335,60 @@ class BackgroundService {
         console.warn('Failed to close offscreen document:', error);
       }
     }
+  }
+
+  getContextSnippet(content, otp, radius = 80) {
+    if (!content || !otp) return '';
+    const index = content.indexOf(otp);
+    if (index === -1) return '';
+    const start = Math.max(0, index - radius);
+    const end = Math.min(content.length, index + otp.length + radius);
+    return content.slice(start, end);
+  }
+
+  validateAiResult(result, content) {
+    if (!result?.success || !result.otp) {
+      return false;
+    }
+
+    if (!/^\d+$/.test(result.otp)) {
+      console.warn('🚫 Rejected AI result: OTP is not purely digits.');
+      return false;
+    }
+
+    if (result.otp.length < CONFIG.OTP.MIN_LENGTH || result.otp.length > CONFIG.OTP.MAX_LENGTH) {
+      console.warn('🚫 Rejected AI result: OTP length out of bounds.');
+      return false;
+    }
+
+    const confidence = typeof result.confidence === 'number' ? result.confidence : 0;
+    const reasoning = (result.reasoning || '').toLowerCase();
+    const snippet = this.getContextSnippet(content, result.otp).toLowerCase();
+
+    const hasPositiveCue = POSITIVE_CONTEXT_KEYWORDS.some(keyword =>
+      snippet.includes(keyword) || reasoning.includes(keyword)
+    );
+
+    const hasNegativeCue = NEGATIVE_CONTEXT_KEYWORDS.some(keyword =>
+      snippet.includes(keyword) || reasoning.includes(keyword)
+    );
+
+    if (!hasPositiveCue && confidence < CONFIG.OTP.CONFIDENCE_THRESHOLD) {
+      console.warn('🚫 Rejected AI result: No positive cues and low confidence.');
+      return false;
+    }
+
+    if (hasNegativeCue && !hasPositiveCue) {
+      console.warn('🚫 Rejected AI result: Negative contexts without positive confirmation.');
+      return false;
+    }
+
+    if (hasNegativeCue && confidence < 0.9) {
+      console.warn('🚫 Rejected AI result: Confidence too low near negative context.');
+      return false;
+    }
+
+    return true;
   }
 }
 
