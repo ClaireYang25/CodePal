@@ -195,26 +195,35 @@ class BackgroundService {
         return;
       } catch (error) {
         console.warn('⚠️ Failed to open popup automatically:', error?.message || error);
+        // Retry once after a short delay (focus may change)
+        try {
+          await new Promise(resolve => setTimeout(resolve, 1500));
+          await chrome.action.openPopup();
+          return;
+        } catch (retryError) {
+          console.warn('⚠️ Popup retry failed:', retryError?.message || retryError);
+        }
       }
     }
-
+ 
     if (!chrome.notifications) return;
+    const iconUrl = chrome.runtime?.getURL ? chrome.runtime.getURL('assets/icons/icon128.png') : 'assets/icons/icon128.png';
     const title = `Verification code: ${result.otp}`;
     const lines = [];
     if (meta.from) lines.push(`From: ${meta.from}`);
     if (meta.subject) lines.push(`Subject: ${meta.subject}`);
     if (!lines.length && meta.threadUrl) lines.push(meta.threadUrl);
     const message = lines.join('\n') || 'New verification code available';
-
-    try {
-      chrome.notifications.create(`otp-${Date.now()}`, {
-        type: 'basic',
-        iconUrl: 'assets/icons/icon128.png',
-        title,
-        message,
-        priority: 2
-      });
-    } catch (error) {
+ 
+     try {
+       chrome.notifications.create(`otp-${Date.now()}`, {
+         type: 'basic',
+         iconUrl,
+         title,
+         message,
+         priority: 2
+       });
+     } catch (error) {
       console.warn('⚠️ Failed to show OTP notification:', error?.message || error);
     }
   }

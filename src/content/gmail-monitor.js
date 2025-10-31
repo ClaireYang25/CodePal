@@ -19,6 +19,7 @@ class GmailContentMonitor {
         this.maxProcessedEntries = 200;
         this.pollIntervalMs = 7000;
         this.pollTimer = null;
+        this.hasBootstrapped = false;
         this.otpKeywordPattern = /(验证码|驗證|認證|otp|one-time|verification code|security code|auth code|passcode|pin|kode verifikasi|codigo)/i;
         this.observer = null;
         this.init();
@@ -27,6 +28,7 @@ class GmailContentMonitor {
     async init() {
         try {
             await this.waitForElement(this.selectors.mainContainer);
+            this.bootstrapExistingThreads();
             console.log('✅ Gmail monitor initialized');
             this.startObserver();
             this.attachClickHandler();
@@ -65,6 +67,16 @@ class GmailContentMonitor {
         }
     }
 
+    bootstrapExistingThreads() {
+        if (this.hasBootstrapped) return;
+        const rows = document.querySelectorAll(this.selectors.threadRow);
+        for (const row of rows) {
+            const key = this.computeDedupeKey(row);
+            if (key) this.addProcessedKey(key);
+        }
+        this.hasBootstrapped = true;
+    }
+
     startObserver() {
         const targetNode = document.querySelector(this.selectors.mainContainer);
         if (!targetNode) return;
@@ -89,15 +101,10 @@ class GmailContentMonitor {
     scanThreadList() {
         const rows = document.querySelectorAll(`${this.selectors.threadRow}.zE`); // Only unread threads
         for (const row of rows) {
-            const lastMsgId = row.getAttribute('data-legacy-last-message-id')
-                || row.querySelector('[data-legacy-last-message-id]')?.getAttribute('data-legacy-last-message-id');
-            const threadId = row.getAttribute('data-thread-id')
-                || row.querySelector(this.selectors.threadItem)?.getAttribute('data-thread-id');
-            const receivedAt = this.extractTimestamp(row);
-            const dedupeKey = lastMsgId || (threadId ? `${threadId}__${receivedAt}` : null);
+            const dedupeKey = this.computeDedupeKey(row);
             if (dedupeKey && this.processedMessageKeys.has(dedupeKey)) continue;
 
-            const meta = this.collectMeta(row, lastMsgId, threadId, receivedAt);
+            const meta = this.collectMeta(row);
             const aggregatedText = meta.aggregateText;
             if (!aggregatedText || aggregatedText.length < 10) continue;
             if (!this.otpKeywordPattern.test(aggregatedText)) continue;
@@ -126,12 +133,28 @@ class GmailContentMonitor {
         });
     }
 
+    computeDedupeKey(threadNode) {
+        const lastMsgId = threadNode.getAttribute('data-legacy-last-message-id')
+            || threadNode.querySelector('[data-legacy-last-message-id]')?.getAttribute('data-legacy-last-message-id');
+        const threadId = threadNode.getAttribute('data-thread-id')
+            || threadNode.querySelector(this.selectors.threadItem)?.getAttribute('data-thread-id');
+        const receivedAt = this.extractTimestamp(threadNode);
+        if (lastMsgId) return lastMsgId;
+        if (threadId) return `${threadId}__${receivedAt}`;
+        return null;
+    }
+
     extractTimestamp(threadNode) {
         const tsNode = threadNode.querySelector(this.selectors.timestamp);
         return tsNode?.getAttribute('title')?.trim() || tsNode?.textContent?.trim() || '';
     }
 
-    collectMeta(threadNode, messageId, threadId, receivedAt) {
+    collectMeta(threadNode) {
+        const messageId = threadNode.getAttribute('data-legacy-last-message-id')
+            || threadNode.querySelector('[data-legacy-last-message-id]')?.getAttribute('data-legacy-last-message-id') || '';
+        const threadId = threadNode.getAttribute('data-thread-id')
+            || threadNode.querySelector(this.selectors.threadItem)?.getAttribute('data-thread-id') || '';
+        const receivedAt = this.extractTimestamp(threadNode);
         const aria = (threadNode.getAttribute('aria-label') || '').trim();
         const snippet = (threadNode.querySelector(this.selectors.snippet)?.textContent || '').trim();
         const subject = (threadNode.querySelector(this.selectors.subject)?.textContent || '').trim();
