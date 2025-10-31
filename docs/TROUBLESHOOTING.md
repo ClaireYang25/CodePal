@@ -128,10 +128,10 @@
   ```
 
 ### 问题 15: [Content Script] `Extension context invalidated` 在存储去重列表时出现
-- **背景**: 将提取过的邮件 ID 持久化到 `chrome.storage.local` 以避免重复处理。
-- **现象**: Gmail 页面被刷新或扩展重新加载后，控制台反复出现 `Extension context invalidated`，同时提取流程被打断。
-- **原因**: 已卸载的旧版本 content script 还在尝试写入 storage；API 被调用时扩展上下文已经失效。
-- **解决方案**: 在 `persistProcessedKeys()` 中先校验 `chrome.runtime.id` 是否存在；调用 `chrome.storage.local.set` 时使用回调检查 `chrome.runtime.lastError`，对 `Extension context invalidated` 仅记录一次警告并跳过写入，从而既保留去重机制又避免打断流程。
+- **背景**: 早期版本尝试将提取过的邮件 ID 持久化到 `chrome.storage.local`。
+- **现象**: Gmail 页面刷新或扩展重载后，控制台反复出现 `Extension context invalidated`，偶尔打断提取流程。
+- **原因**: 已卸载的旧版 Content Script 仍在尝试写入 storage，API 被调用时扩展上下文已失效。
+- **解决方案**: 改为“会话内内存去重”并配合节流轮询。在当前页面会话中维护 200 条最近处理的 ID，并每 7 秒兜底扫描一次未读线程，从根源上避免 storage 调用；就算扩展重载，新的 content script 也会重新积累去重列表，整个过程更稳定。
 
 ### 问题 16: [Offscreen Document] `Only a single offscreen document may be created`
 - **背景**: Service Worker 在调用 Gemini Nano 之前会通过 `callOffscreenNano()` 创建 offscreen document。
