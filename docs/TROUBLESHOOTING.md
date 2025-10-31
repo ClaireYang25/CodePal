@@ -127,6 +127,18 @@
   /your\s+(?:verification\s+)?code\s*[：:is\s]+(\d{4,8})/i  // ✅ 可以匹配
   ```
 
+### 问题 15: [Content Script] `Extension context invalidated` 在存储去重列表时出现
+- **背景**: 将提取过的邮件 ID 持久化到 `chrome.storage.local` 以避免重复处理。
+- **现象**: Gmail 页面被刷新或扩展重新加载后，控制台反复出现 `Extension context invalidated`，同时提取流程被打断。
+- **原因**: 已卸载的旧版本 content script 还在尝试写入 storage；API 被调用时扩展上下文已经失效。
+- **解决方案**: 在 `persistProcessedKeys()` 中先校验 `chrome.runtime.id` 是否存在；调用 `chrome.storage.local.set` 时使用回调检查 `chrome.runtime.lastError`，对 `Extension context invalidated` 仅记录一次警告并跳过写入，从而既保留去重机制又避免打断流程。
+
+### 问题 16: [Offscreen Document] `Only a single offscreen document may be created`
+- **背景**: Service Worker 在调用 Gemini Nano 之前会通过 `callOffscreenNano()` 创建 offscreen document。
+- **现象**: 在 Gmail 页面尚未发送验证码前多次打开 Popup，控制台偶发该错误但流程被中断。
+- **原因**: 在 `chrome.offscreen.hasDocument()` 与 `createDocument()` 之间存在竞态，导致同一时间尝试创建多个 offscreen document。
+- **解决方案**: 为 `chrome.offscreen.createDocument()` 添加 try/catch；遇到该错误时只记录 warning 并继续执行，其它真正的异常依旧抛出。这样可保证 Nano 只实例化一次，同时不影响提取路径。
+
 ---
 
 ## 🛠️ 调试技巧
