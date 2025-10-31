@@ -267,12 +267,19 @@ class BackgroundService {
       
       if (!hasDocument) {
         console.log('📄 Creating offscreen document for Nano...');
-        
-        await chrome.offscreen.createDocument({
-          url: CONFIG.OFFSCREEN.PATH,
-          reasons: [chrome.offscreen.Reason.IFRAME_SCRIPTING],
-          justification: 'Required for Gemini Nano execution (needs window context)'
-        });
+        try {
+          await chrome.offscreen.createDocument({
+            url: CONFIG.OFFSCREEN.PATH,
+            reasons: [chrome.offscreen.Reason.IFRAME_SCRIPTING],
+            justification: 'Required for Gemini Nano execution (needs window context)'
+          });
+        } catch (error) {
+          if (String(error?.message || error).includes('Only a single offscreen document may be created')) {
+            console.warn('⚠️ Offscreen document already exists, continuing.');
+          } else {
+            throw error;
+          }
+        }
         
         // Wait for initialization
         await new Promise(resolve => setTimeout(resolve, CONFIG.OFFSCREEN.INIT_DELAY));
