@@ -85,9 +85,9 @@
     -   **任务**: 列表视图仅处理 `.zA.zE`（未读）线程；以 `data-legacy-last-message-id`/`data-thread-id` 去重；主题/摘要关键词预筛；不在“打开单封邮件正文视图”触发。
     -   **现状**: 已完成。未读线程首次出现时才触发提取，处理过的 ID 会持久化并裁剪为 200 条缓存。向后台发送时同时附带 `from/subject/snippet/ariaLabel/receivedAt/threadUrl` 元信息，为后续展示与模型推理提供上下文。
 
--   🟡 **行动 2.4：自动呈现与来源信息**
+-   ✅ **行动 2.4：自动呈现与来源信息**
     -   **任务**: 成功提取后优先尝试 `chrome.action.openPopup()`；若受限则以系统通知兜底（显示 OTP、发件人、主题等）。Popup 渲染 `from/subject/snippet` 源信息。
-    -   **现状**: 待落地。
+    -   **现状**: 已完成。Service Worker 在成功提取后先尝试自动打开 Popup，失败时通过 `chrome.notifications` 推送 OTP（包含发件人/主题）；Popup 读取 `LATEST_OTP.meta` 展示上下文。
 
 -   🟡 **行动 2.5：向 Nano 喂“结构化上下文”，避免正则硬编码**
     -   **任务**: 构建统一 JSON 上下文（示例：`{ from, subject, snippet, receivedAt, threadId }`）与原始正文一并传给 Nano，在 Prompt 中明确“优先依据结构化字段判断、并给出理由”；不对元信息做复杂正则解析，尽量依赖 DOM 语义与模型推理，减少脆弱硬编码。
