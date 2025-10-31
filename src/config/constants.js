@@ -115,17 +115,21 @@ export const CONFIG = {
  * @param {string} language - Language code
  * @returns {string} Formatted prompt
  */
-export function buildOTPPrompt(emailContent, language = CONFIG.LANGUAGES.AUTO) {
+export function buildOTPPrompt(emailContent, language = CONFIG.LANGUAGES.AUTO, context = {}) {
   const instruction = CONFIG.PROMPTS.INSTRUCTIONS[language] || CONFIG.PROMPTS.INSTRUCTIONS.auto;
   const positive = CONFIG.PROMPTS.POSITIVE_KEYWORDS[language] || CONFIG.PROMPTS.POSITIVE_KEYWORDS.auto;
   const negative = CONFIG.PROMPTS.NEGATIVE_KEYWORDS[language] || CONFIG.PROMPTS.NEGATIVE_KEYWORDS.auto;
   
   const positiveList = positive.map(item => `- ${item}`).join('\n');
   const negativeList = negative.map(item => `- ${item}`).join('\n');
+  const contextJson = JSON.stringify(context, createContextReplacer(), 2) || '{}';
   
   return `You are a verification code extraction assistant. Your goal is to return the true one-time password (OTP) from the email and avoid all irrelevant numbers.
 
 ${instruction}
+
+Structured context (metadata from the client):
+${contextJson}
 
 Helpful cues (prioritize numbers surrounded by these words):
 ${positiveList}
@@ -144,16 +148,36 @@ Return in JSON format:
 {
   "otp": "${CONFIG.OTP.MIN_LENGTH}-${CONFIG.OTP.MAX_LENGTH} digit verification code or null",
   "confidence": 0.0,
-  "reasoning": "Explain the nearby words that prove it is the OTP"
+  "reasoning": "Explain the nearby words or metadata cues that prove it is the OTP",
+  "source": {
+    "field": "which metadata field (if any) helped you decide"
+  }
 }
 
 Rules:
 1. Only return digits (${CONFIG.OTP.MIN_LENGTH}-${CONFIG.OTP.MAX_LENGTH} length). Do not invent characters.
-2. Set otp to null if the email does not contain a clearly labeled verification code.
-3. Confidence must be between 0 and 1 (float).
-4. Reasoning must mention the exact words that guided your decision.
-5. Return JSON only, no prose or markdown.
+2. Respect metadata: if structured context contradicts the body, trust the field explicitly indicating verification.
+3. Set otp to null if the email does not contain a clearly labeled verification code.
+4. Confidence must be between 0 and 1 (float).
+5. Reasoning must mention the words or metadata that guided your decision.
+6. Return JSON only, no prose or markdown.
 
 JSON:`;
+}
+
+function createContextReplacer() {
+  const seen = new WeakSet();
+  return (_key, value) => {
+    if (typeof value === 'object' && value !== null) {
+      if (seen.has(value)) {
+        return undefined;
+      }
+      seen.add(value);
+    }
+    if (typeof value === 'string') {
+      return value.length > 500 ? `${value.slice(0, 500)}…` : value;
+    }
+    return value;
+  };
 }
 

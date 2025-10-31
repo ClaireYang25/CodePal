@@ -84,7 +84,7 @@ async function initializeNano() {
 /**
  * Extract OTP using Gemini Nano
  */
-async function extractOTPWithNano(emailContent, language) {
+async function extractOTPWithNano(emailContent, language, context = {}) {
   try {
     // Ensure initialization
     if (!isInitialized) {
@@ -106,7 +106,7 @@ async function extractOTPWithNano(emailContent, language) {
     }
 
     // Build prompt
-    const prompt = buildOTPPrompt(emailContent, language);
+    const prompt = buildOTPPrompt(emailContent, language, context);
     
     console.log('🤖 Asking Gemini Nano to extract OTP...');
     
@@ -254,7 +254,8 @@ async function handleMessage(request, sendResponse) {
       case CONFIG.ACTIONS.OFFSCREEN_EXTRACT_OTP:
         const result = await extractOTPWithNano(
           request.emailContent,
-          request.language
+          request.language,
+          request.meta || {}
         );
         sendResponse(result);
         break;

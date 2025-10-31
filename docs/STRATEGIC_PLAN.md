@@ -89,9 +89,9 @@
     -   **任务**: 成功提取后优先尝试 `chrome.action.openPopup()`；若受限则以系统通知兜底（显示 OTP、发件人、主题等）。Popup 渲染 `from/subject/snippet` 源信息。
     -   **现状**: 已完成。Service Worker 在成功提取后先尝试自动打开 Popup，失败时通过 `chrome.notifications` 推送 OTP（包含发件人/主题）；Popup 读取 `LATEST_OTP.meta` 展示上下文。
 
--   🟡 **行动 2.5：向 Nano 喂“结构化上下文”，避免正则硬编码**
+-   ✅ **行动 2.5：向 Nano 喂“结构化上下文”，避免正则硬编码**
     -   **任务**: 构建统一 JSON 上下文（示例：`{ from, subject, snippet, receivedAt, threadId }`）与原始正文一并传给 Nano，在 Prompt 中明确“优先依据结构化字段判断、并给出理由”；不对元信息做复杂正则解析，尽量依赖 DOM 语义与模型推理，减少脆弱硬编码。
-    -   **现状**: 待落地（`buildOTPPrompt` 增补 context 区块 + Prompt 规则）。
+    -   **现状**: 已完成。Content Script 提供结构化元信息，Service Worker 原样传递，`buildOTPPrompt` 将 context 以 JSON 嵌入，并要求模型在 reasoning 中引用来源字段；Regex 仍作为快速通道，模型负责高干扰场景的语义判断。
 
 -   ✅ **行动 2.6：消息监听健壮性**
     -   **任务**: 巩固 `onMessage` 协议：仅在保证异步 `sendResponse` 的分支返回 `true`；统一 try/catch 包裹异步，确保异常时也 `sendResponse`，杜绝“return true 但未响应”的错误。
@@ -117,7 +117,7 @@
     -   **任务**: 当在后台成功提取到 OTP 后，使用 `chrome.notifications` API 创建一个原生的系统通知，主动将验证码推送给用户。
 
 ---
-**当前结论**: 阶段一完成且稳定；阶段二已落地“意图监听”，其余项正分步推进。我们将尽量避免脆弱硬编码：触发侧以“未读 + 去重 + 关键词预筛”为门槛，提取侧采用“结构化上下文 + 模型推理”为主、正则为辅（快速通道）。完成本阶段后再进入阶段三（Gmail API 完全后台 + 动态轮询 + 系统级通知整合）。
+**当前结论**: 阶段一与阶段二所有行动均已完成：主动意图监听、云层冻结、未读去重、自动呈现、结构化上下文推理全部上线。系统已进入“半后台稳定 + 主动感知”状态，下一阶段可着手 Gmail API 完全后台化（阶段三：动态轮询 + 系统级通知整合）。
 
 ---
 

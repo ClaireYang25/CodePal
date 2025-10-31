@@ -48,7 +48,7 @@ export class AIService {
   /**
    * Extract OTP using Gemini API
    */
-  async extractOTP(emailContent, language = CONFIG.LANGUAGES.AUTO) {
+  async extractOTP(emailContent, language = CONFIG.LANGUAGES.AUTO, context = {}) {
     // Skip entirely if disabled
     if (CONFIG.API.GEMINI.ENABLED === false) {
       return { success: false, skipped: true };
@@ -59,7 +59,7 @@ export class AIService {
       throw new Error('Gemini API key not configured.');
     }
 
-    const prompt = buildOTPPrompt(emailContent, language);
+    const prompt = buildOTPPrompt(emailContent, language, context);
     const response = await this.callAPI(prompt);
     return this.parseResponse(response);
   }
@@ -142,7 +142,7 @@ export class AIService {
   /**
    * Test API connection
    */
-  async testConnection() {
+  async testConnection(context = {}) {
     if (CONFIG.API.GEMINI.ENABLED === false) {
       return { success: false, skipped: true };
     }

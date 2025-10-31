@@ -103,7 +103,7 @@ class BackgroundService {
     }
 
     // Tier 2: Gemini Nano - Private and on-device AI
-    result = await this._tryNano(emailContent, language);
+    result = await this._tryNano(emailContent, language, meta);
     if (result.success) {
       result.meta = meta;
       console.log(`✅ OTP found via GEMINI NANO (confidence: ${result.confidence})`);
@@ -112,7 +112,7 @@ class BackgroundService {
     }
     
     // Tier 3: Gemini API - Powerful cloud fallback
-    result = await this._tryApi(emailContent, language);
+    result = await this._tryApi(emailContent, language, meta);
     if (result.success) {
       result.meta = meta;
       console.log(`✅ OTP found via GEMINI API (cloud)`);
@@ -134,13 +134,14 @@ class BackgroundService {
     return { success: false };
   }
 
-  async _tryNano(content, language) {
+  async _tryNano(content, language, meta) {
     console.log('2️⃣ Tier 2: Trying Gemini Nano...');
     try {
       const nanoResult = await this.callOffscreenNano({
         action: CONFIG.ACTIONS.OFFSCREEN_EXTRACT_OTP,
         emailContent: content,
-        language
+        language,
+        meta
       });
       console.log('📥 Nano returned:', JSON.stringify(nanoResult));
       if (nanoResult?.success) {
@@ -157,13 +158,13 @@ class BackgroundService {
     return { success: false };
   }
 
-  async _tryApi(content, language) {
+  async _tryApi(content, language, meta) {
     if (CONFIG.API.GEMINI.ENABLED === false) {
       return { success: false };
     }
     console.log('3️⃣ Tier 3: Trying Gemini API (cloud)...');
     try {
-      const apiResult = await this.aiService.extractOTP(content, language);
+      const apiResult = await this.aiService.extractOTP(content, language, meta);
       if (apiResult.success) {
         const enriched = { ...apiResult, method: apiResult.method || 'gemini-api' };
         if (this.validateAiResult(enriched, content)) {
