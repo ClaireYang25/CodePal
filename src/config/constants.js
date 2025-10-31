@@ -25,7 +25,9 @@ export const CONFIG = {
       TEMPERATURE: 0.1,
       TOP_K: 1,
       TOP_P: 0.8,
-      MAX_OUTPUT_TOKENS: 500
+      MAX_OUTPUT_TOKENS: 500,
+      ENABLED: false, // freeze cloud tier for now
+      SILENT: true    // suppress warnings/logs when disabled or missing key
     }
   },
   

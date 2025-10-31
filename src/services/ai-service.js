@@ -13,12 +13,18 @@ export class AIService {
 
   async init() {
     try {
+      // If cloud tier disabled, skip initialization quietly
+      if (CONFIG.API.GEMINI.ENABLED === false) {
+        return;
+      }
       this.apiKey = await this.getAPIKey();
-      if (!this.apiKey) {
+      if (!this.apiKey && !CONFIG.API.GEMINI.SILENT) {
         console.warn('Gemini API key not configured. Using Gemini Nano only.');
       }
     } catch (error) {
-      console.error('AI Service initialization failed:', error);
+      if (!CONFIG.API.GEMINI.SILENT) {
+        console.error('AI Service initialization failed:', error);
+      }
     }
   }
 
@@ -41,12 +47,15 @@ export class AIService {
 
   /**
    * Extract OTP using Gemini API
-   * @param {string} emailContent - Email content
-   * @param {string} language - Language code
-   * @returns {Promise<Object>} Extraction result
    */
   async extractOTP(emailContent, language = CONFIG.LANGUAGES.AUTO) {
+    // Skip entirely if disabled
+    if (CONFIG.API.GEMINI.ENABLED === false) {
+      return { success: false, skipped: true };
+    }
+
     if (!this.apiKey) {
+      if (CONFIG.API.GEMINI.SILENT) return { success: false, skipped: true };
       throw new Error('Gemini API key not configured.');
     }
 
@@ -134,8 +143,14 @@ export class AIService {
    * Test API connection
    */
   async testConnection() {
+    if (CONFIG.API.GEMINI.ENABLED === false) {
+      return { success: false, skipped: true };
+    }
+
     if (!this.apiKey) {
-      return { success: false, error: 'API key not configured' };
+      return CONFIG.API.GEMINI.SILENT
+        ? { success: false, skipped: true }
+        : { success: false, error: 'API key not configured' };
     }
     
     try {

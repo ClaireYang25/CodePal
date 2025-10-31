@@ -155,6 +155,9 @@ class BackgroundService {
   }
 
   async _tryApi(content, language) {
+    if (CONFIG.API.GEMINI.ENABLED === false) {
+      return { success: false };
+    }
     console.log('3️⃣ Tier 3: Trying Gemini API (cloud)...');
     try {
       const apiResult = await this.aiService.extractOTP(content, language);
