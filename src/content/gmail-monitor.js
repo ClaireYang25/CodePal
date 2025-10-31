@@ -67,16 +67,18 @@ class GmailContentMonitor {
             ? entries.slice(entries.length - this.maxProcessedEntries)
             : entries;
         this.processedMessageKeys = new Set(trimmed);
-        try {
-            chrome.storage.local.set({ [this.processedStorageKey]: trimmed }, () => {
-                const err = chrome.runtime?.lastError;
-                if (err) {
-                    console.warn('⚠️ Failed to persist processed keys:', err.message);
-                }
-            });
-        } catch (error) {
-            console.warn('⚠️ Storage persistence error:', error);
+
+        if (!chrome.runtime?.id) {
+            console.warn('⚠️ Skip persisting processed keys: extension context invalidated.');
+            return;
         }
+
+        chrome.storage.local.set({ [this.processedStorageKey]: trimmed }, () => {
+            const err = chrome.runtime?.lastError;
+            if (err && !/Extension context invalidated/i.test(err.message)) {
+                console.warn('⚠️ Failed to persist processed keys:', err.message);
+            }
+        });
     }
 
     addProcessedKey(key) {
