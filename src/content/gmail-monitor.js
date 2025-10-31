@@ -8,15 +8,14 @@ class GmailContentMonitor {
     constructor() {
         this.selectors = {
             mainContainer: '[role="main"]',
+            threadRow: '.zA', // Gmail thread row
             threadItem: '[data-thread-id]',
             messageContainer: '[data-message-id]',
-            // Candidates frequently seen in Gmail DOM for the opened message body
             bodyCandidates: ['.a3s', '.a3s.aiL', '.gmail_default', '[dir="ltr"]'],
-            // Snippet element used in thread list view
-            snippet: '.y2'
+            snippet: '.y2',
+            subject: '.y6 .bog'
         };
-        this.processedMessageIds = new Set();
-        this.processedThreadIds = new Set();
+        this.processedMessageKeys = new Set();
         this.observer = null;
         this.init();
     }
@@ -52,7 +51,7 @@ class GmailContentMonitor {
 
         this.observer = new MutationObserver(() => {
             clearTimeout(this.scanTimeout);
-            this.scanTimeout = setTimeout(() => this.scanForContent(), 400);
+            this.scanTimeout = setTimeout(() => this.scanForContent(), 300);
         });
 
         this.observer.observe(targetNode, { childList: true, subtree: true });
@@ -60,15 +59,13 @@ class GmailContentMonitor {
 
     attachClickHandler() {
         document.addEventListener('click', (e) => {
-            const thread = e.target.closest(this.selectors.threadItem);
+            const thread = e.target.closest(this.selectors.threadRow + ', ' + this.selectors.threadItem);
             if (thread) {
-                const threadId = thread.getAttribute('data-thread-id');
                 // Defer to allow Gmail to render the message body
                 setTimeout(() => {
-                    this.scanThreadSnippet(thread);
+                    this.scanThreadList();
                     this.scanOpenedMessages();
-                    if (threadId) this.processedThreadIds.add(threadId);
-                }, 500);
+                }, 400);
             }
         }, true);
     }
@@ -76,7 +73,7 @@ class GmailContentMonitor {
     scanForContent() {
         // 1) Opened messages: extract from message bodies
         this.scanOpenedMessages();
-        // 2) Thread list view: extract from visible snippets
+        // 2) Thread list view: extract from visible snippets/aria labels
         this.scanThreadList();
     }
 
@@ -84,43 +81,52 @@ class GmailContentMonitor {
         const messageNodes = document.querySelectorAll(this.selectors.messageContainer);
         for (const node of messageNodes) {
             const msgId = node.getAttribute('data-message-id');
-            if (!msgId || this.processedMessageIds.has(msgId)) continue;
+            const key = msgId || undefined;
+            if (key && this.processedMessageKeys.has(key)) continue;
 
             const bodyText = this.extractBodyText(node);
             if (bodyText && bodyText.trim().length > 10) {
                 this.sendForExtraction(bodyText);
-                this.processedMessageIds.add(msgId);
+                if (key) this.processedMessageKeys.add(key);
             }
         }
     }
 
     scanThreadList() {
-        const threads = document.querySelectorAll(this.selectors.threadItem);
-        for (const thread of threads) {
-            const threadId = thread.getAttribute('data-thread-id');
-            if (threadId && this.processedThreadIds.has(threadId)) continue;
-            this.scanThreadSnippet(thread);
-            if (threadId) this.processedThreadIds.add(threadId);
+        const rows = document.querySelectorAll(this.selectors.threadRow);
+        for (const row of rows) {
+            // Prefer last message id if available (more precise de-duplication)
+            const lastMsgId = row.getAttribute('data-legacy-last-message-id')
+                || row.querySelector('[data-legacy-last-message-id]')?.getAttribute('data-legacy-last-message-id');
+            const threadId = row.getAttribute('data-thread-id') || row.querySelector(this.selectors.threadItem)?.getAttribute('data-thread-id');
+            const key = lastMsgId || threadId;
+            if (key && this.processedMessageKeys.has(key)) continue;
+
+            const text = this.collectThreadText(row);
+            if (text && text.length > 10) {
+                this.sendForExtraction(text);
+                if (key) this.processedMessageKeys.add(key);
+            }
         }
     }
 
-    scanThreadSnippet(threadNode) {
-        if (!threadNode) return;
-        const snippetEl = threadNode.querySelector(this.selectors.snippet);
-        const text = (snippetEl?.textContent || '').trim();
-        if (text && text.length > 10) {
-            this.sendForExtraction(text);
-        }
+    collectThreadText(threadNode) {
+        // Prefer aria-label since it often includes a readable summary
+        const aria = (threadNode.getAttribute('aria-label') || '').trim();
+        if (aria && aria.length > 10) return aria;
+        // Otherwise try snippet and subject
+        const snippet = (threadNode.querySelector(this.selectors.snippet)?.textContent || '').trim();
+        const subject = (threadNode.querySelector(this.selectors.subject)?.textContent || '').trim();
+        const combined = [subject, snippet].filter(Boolean).join(' - ').trim();
+        return combined;
     }
 
     extractBodyText(messageContainer) {
-        // Try multiple candidates under this message container
         for (const sel of this.selectors.bodyCandidates) {
             const el = messageContainer.querySelector(sel);
             const txt = (el?.textContent || '').trim();
             if (txt && txt.length > 10) return txt;
         }
-        // Fallback to full container text
         const fallback = (messageContainer.textContent || '').trim();
         return fallback;
     }
@@ -132,16 +138,56 @@ class GmailContentMonitor {
                 emailContent: content
             });
         } catch (err) {
-            // Common when extension reloads; ignore
             const msg = String(err?.message || '');
             if (!msg.includes('Extension context invalidated') && !msg.includes('Receiving end does not exist')) {
                 console.warn('Failed to send for extraction:', msg);
             }
         }
     }
+
+    // Autofill listener & helpers remain unchanged
+    listenForAutofillRequests() {
+        chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
+            if (request.action === 'fillOTP' && request.otp) {
+                const filled = this.fillOtpInPage(request.otp);
+                sendResponse({ success: filled });
+                return false;
+            }
+            return false;
+        });
+    }
+
+    fillOtpInPage(otp) {
+        const inputs = document.querySelectorAll('input[type="text"], input[type="number"], input[type="tel"]');
+        const otpKeywords = ['otp', 'verification', 'code', 'token', 'pin', 'auth'];
+
+        for (const input of inputs) {
+            const id = (input.id || '').toLowerCase();
+            const name = (input.name || '').toLowerCase();
+            const placeholder = (input.placeholder || '').toLowerCase();
+            const ariaLabel = (input.getAttribute('aria-label') || '').toLowerCase();
+            const isOtpInput = otpKeywords.some(k => id.includes(k) || name.includes(k) || placeholder.includes(k) || ariaLabel.includes(k));
+            if (isOtpInput && !input.value) {
+                input.value = otp;
+                input.dispatchEvent(new Event('input', { bubbles: true }));
+                input.dispatchEvent(new Event('change', { bubbles: true }));
+                this.showToast(`OTP autofilled: ${otp}`);
+                return true;
+            }
+        }
+        this.showToast('OTP found. Click verification field to autofill.');
+        return false;
+    }
+
+    showToast(message) {
+        const node = document.createElement('div');
+        node.textContent = message;
+        node.style.cssText = `position:fixed;top:20px;right:20px;background:rgba(0,0,0,0.85);color:#fff;padding:10px 14px;border-radius:6px;z-index:999999;font-size:12px;font-family:-apple-system,BlinkMacSystemFont,Segoe UI,Roboto,Arial,sans-serif;box-shadow:0 4px 12px rgba(0,0,0,0.25);`;
+        document.body.appendChild(node);
+        setTimeout(() => node.remove(), 2500);
+    }
 }
 
-// Ensure the script runs only once
 if (typeof window.gmailMonitor === 'undefined') {
     window.gmailMonitor = new GmailContentMonitor();
 }
