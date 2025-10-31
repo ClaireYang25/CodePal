@@ -93,9 +93,9 @@
     -   **任务**: 构建统一 JSON 上下文（示例：`{ from, subject, snippet, receivedAt, threadId }`）与原始正文一并传给 Nano，在 Prompt 中明确“优先依据结构化字段判断、并给出理由”；不对元信息做复杂正则解析，尽量依赖 DOM 语义与模型推理，减少脆弱硬编码。
     -   **现状**: 待落地（`buildOTPPrompt` 增补 context 区块 + Prompt 规则）。
 
--   🟡 **行动 2.6：消息监听健壮性**
+-   ✅ **行动 2.6：消息监听健壮性**
     -   **任务**: 巩固 `onMessage` 协议：仅在保证异步 `sendResponse` 的分支返回 `true`；统一 try/catch 包裹异步，确保异常时也 `sendResponse`，杜绝“return true 但未响应”的错误。
-    -   **现状**: 部分完成，继续排查 Offscreen 分支。
+    -   **现状**: 已完成。Offscreen listener 以 Promise 封装，任何意外异常都会二次封装成 `sendResponse({ success: false, error })`，并避免重复响应。
 
 -   🟡 **行动 2.7：实现动态轮询频率（与阶段三联动）**
     -   **任务**: （引入 Gmail API 后）当高警戒激活时将轮询从 30s 动态调整至 5s；高警戒结束恢复常速。
