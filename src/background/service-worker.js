@@ -84,7 +84,7 @@ class BackgroundService {
    * This is the entry point for the three-tier engine.
    */
   async handleExtractOTP(request, sendResponse) {
-    const { emailContent } = request;
+    const { emailContent, meta = {} } = request;
     const language = this.detectLanguage(emailContent);
     let result = { success: false, confidence: 0 };
 
@@ -96,6 +96,7 @@ class BackgroundService {
     // Tier 1: Regex - Fast and local
     result = await this._tryRegex(emailContent, language);
     if (result.success) {
+      result.meta = meta;
       console.log(`✅ OTP found via LOCAL REGEX (confidence: ${result.confidence})`);
       await this.processSuccess(result);
       return sendResponse(result);
@@ -104,6 +105,7 @@ class BackgroundService {
     // Tier 2: Gemini Nano - Private and on-device AI
     result = await this._tryNano(emailContent, language);
     if (result.success) {
+      result.meta = meta;
       console.log(`✅ OTP found via GEMINI NANO (confidence: ${result.confidence})`);
       await this.processSuccess(result);
       return sendResponse(result);
@@ -112,6 +114,7 @@ class BackgroundService {
     // Tier 3: Gemini API - Powerful cloud fallback
     result = await this._tryApi(emailContent, language);
     if (result.success) {
+      result.meta = meta;
       console.log(`✅ OTP found via GEMINI API (cloud)`);
       await this.processSuccess(result);
       return sendResponse(result);
@@ -208,7 +211,8 @@ class BackgroundService {
           otp: result.otp,
           timestamp: Date.now(),
           method: result.method || 'unknown',
-          confidence: result.confidence
+          confidence: result.confidence,
+          meta: result.meta || {}
         }
       });
     }

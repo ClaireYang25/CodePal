@@ -12,7 +12,8 @@ export const CONFIG = {
   STORAGE_KEYS: {
     GEMINI_API_KEY: 'geminiApiKey',
     LATEST_OTP: 'latestOTP',
-    POPUP_SETTINGS: 'popupSettings'
+    POPUP_SETTINGS: 'popupSettings',
+    PROCESSED_MESSAGE_IDS: 'processedMessageIds'
   },
   
   // API Configuration

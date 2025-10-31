@@ -10,12 +10,13 @@ class GmailContentMonitor {
             mainContainer: '[role="main"]',
             threadRow: '.zA', // Gmail thread row
             threadItem: '[data-thread-id]',
-            messageContainer: '[data-message-id]',
-            bodyCandidates: ['.a3s', '.a3s.aiL', '.gmail_default', '[dir="ltr"]'],
             snippet: '.y2',
             subject: '.y6 .bog'
         };
+        this.processedStorageKey = 'processedMessageIds';
+        this.maxProcessedEntries = 200;
         this.processedMessageKeys = new Set();
+        this.otpKeywordPattern = /(验证码|驗證|認證|otp|one-time|verification code|security code|auth code|passcode|pin|kode verifikasi|codigo)/i;
         this.observer = null;
         this.init();
     }
@@ -23,11 +24,12 @@ class GmailContentMonitor {
     async init() {
         try {
             await this.waitForElement(this.selectors.mainContainer);
+            await this.loadProcessedKeys();
             console.log('✅ Gmail monitor initialized');
             this.startObserver();
             this.attachClickHandler();
-            // Initial scan
-            this.scanForContent();
+            this.listenForAutofillRequests();
+            this.scanThreadList();
         } catch (error) {
             console.error('❌ Content script initialization failed:', error);
         }
@@ -45,13 +47,42 @@ class GmailContentMonitor {
         });
     }
 
+    async loadProcessedKeys() {
+        try {
+            const result = await chrome.storage.local.get([this.processedStorageKey]);
+            const entries = Array.isArray(result[this.processedStorageKey]) ? result[this.processedStorageKey] : [];
+            entries.forEach((key) => {
+                if (typeof key === 'string' && key) this.processedMessageKeys.add(key);
+            });
+        } catch (error) {
+            console.warn('⚠️ Failed to load processed keys:', error);
+        }
+    }
+
+    persistProcessedKeys() {
+        const entries = Array.from(this.processedMessageKeys);
+        const trimmed = entries.length > this.maxProcessedEntries
+            ? entries.slice(entries.length - this.maxProcessedEntries)
+            : entries;
+        this.processedMessageKeys = new Set(trimmed);
+        chrome.storage.local.set({ [this.processedStorageKey]: trimmed }).catch(() => {
+            // Ignore storage errors (quota, etc.)
+        });
+    }
+
+    addProcessedKey(key) {
+        if (!key || typeof key !== 'string') return;
+        this.processedMessageKeys.add(key);
+        this.persistProcessedKeys();
+    }
+
     startObserver() {
         const targetNode = document.querySelector(this.selectors.mainContainer);
         if (!targetNode) return;
 
         this.observer = new MutationObserver(() => {
             clearTimeout(this.scanTimeout);
-            this.scanTimeout = setTimeout(() => this.scanForContent(), 300);
+            this.scanTimeout = setTimeout(() => this.scanThreadList(), 300);
         });
 
         this.observer.observe(targetNode, { childList: true, subtree: true });
@@ -59,83 +90,72 @@ class GmailContentMonitor {
 
     attachClickHandler() {
         document.addEventListener('click', (e) => {
-            const thread = e.target.closest(this.selectors.threadRow + ', ' + this.selectors.threadItem);
+            const thread = e.target.closest(this.selectors.threadRow);
             if (thread) {
-                // Defer to allow Gmail to render the message body
-                setTimeout(() => {
-                    this.scanThreadList();
-                    this.scanOpenedMessages();
-                }, 400);
+                setTimeout(() => this.scanThreadList(), 400);
             }
         }, true);
     }
 
-    scanForContent() {
-        // 1) Opened messages: extract from message bodies
-        this.scanOpenedMessages();
-        // 2) Thread list view: extract from visible snippets/aria labels
-        this.scanThreadList();
-    }
-
-    scanOpenedMessages() {
-        const messageNodes = document.querySelectorAll(this.selectors.messageContainer);
-        for (const node of messageNodes) {
-            const msgId = node.getAttribute('data-message-id');
-            const key = msgId || undefined;
-            if (key && this.processedMessageKeys.has(key)) continue;
-
-            const bodyText = this.extractBodyText(node);
-            if (bodyText && bodyText.trim().length > 10) {
-                this.sendForExtraction(bodyText);
-                if (key) this.processedMessageKeys.add(key);
-            }
-        }
-    }
-
     scanThreadList() {
-        const rows = document.querySelectorAll(this.selectors.threadRow);
+        const rows = document.querySelectorAll(`${this.selectors.threadRow}.zE`); // Only unread threads
         for (const row of rows) {
-            // Prefer last message id if available (more precise de-duplication)
             const lastMsgId = row.getAttribute('data-legacy-last-message-id')
                 || row.querySelector('[data-legacy-last-message-id]')?.getAttribute('data-legacy-last-message-id');
-            const threadId = row.getAttribute('data-thread-id') || row.querySelector(this.selectors.threadItem)?.getAttribute('data-thread-id');
+            const threadId = row.getAttribute('data-thread-id')
+                || row.querySelector(this.selectors.threadItem)?.getAttribute('data-thread-id');
             const key = lastMsgId || threadId;
             if (key && this.processedMessageKeys.has(key)) continue;
 
-            const text = this.collectThreadText(row);
-            if (text && text.length > 10) {
-                this.sendForExtraction(text);
-                if (key) this.processedMessageKeys.add(key);
-            }
+            const meta = this.collectMeta(row, lastMsgId, threadId);
+            const aggregatedText = meta.aggregateText;
+            if (!aggregatedText || aggregatedText.length < 10) continue;
+            if (!this.otpKeywordPattern.test(aggregatedText)) continue;
+
+            const contentForExtraction = meta.ariaLabel || aggregatedText;
+            this.sendForExtraction(contentForExtraction, meta.payload);
+            if (key) this.addProcessedKey(key);
         }
     }
 
-    collectThreadText(threadNode) {
-        // Prefer aria-label since it often includes a readable summary
+    collectMeta(threadNode, messageId, threadId) {
         const aria = (threadNode.getAttribute('aria-label') || '').trim();
-        if (aria && aria.length > 10) return aria;
-        // Otherwise try snippet and subject
         const snippet = (threadNode.querySelector(this.selectors.snippet)?.textContent || '').trim();
         const subject = (threadNode.querySelector(this.selectors.subject)?.textContent || '').trim();
-        const combined = [subject, snippet].filter(Boolean).join(' - ').trim();
-        return combined;
+        const from = (threadNode.querySelector('.yX.xY .yW span')?.textContent
+            || threadNode.querySelector('.yX.xY span[email]')?.textContent
+            || '').trim();
+        const receivedAt = threadNode.querySelector('.xW.xY span')?.getAttribute('title')
+            || threadNode.querySelector('.xW.xY span')?.textContent?.trim()
+            || '';
+        const threadUrl = threadNode.querySelector('a')?.href || '';
+
+        const aggregate = [subject, snippet, aria].filter(Boolean).join(' ');
+
+        const payload = {
+            from,
+            subject,
+            snippet,
+            ariaLabel: aria,
+            threadId: threadId || '',
+            messageId: messageId || '',
+            receivedAt,
+            threadUrl
+        };
+
+        return {
+            aggregateText: aggregate,
+            ariaLabel: aria,
+            payload
+        };
     }
 
-    extractBodyText(messageContainer) {
-        for (const sel of this.selectors.bodyCandidates) {
-            const el = messageContainer.querySelector(sel);
-            const txt = (el?.textContent || '').trim();
-            if (txt && txt.length > 10) return txt;
-        }
-        const fallback = (messageContainer.textContent || '').trim();
-        return fallback;
-    }
-
-    async sendForExtraction(content) {
+    async sendForExtraction(content, meta = {}) {
         try {
             await chrome.runtime.sendMessage({
                 action: 'extractOTP',
-                emailContent: content
+                emailContent: content,
+                meta
             });
         } catch (err) {
             const msg = String(err?.message || '');
@@ -145,7 +165,6 @@ class GmailContentMonitor {
         }
     }
 
-    // Autofill listener & helpers remain unchanged
     listenForAutofillRequests() {
         chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
             if (request.action === 'fillOTP' && request.otp) {
