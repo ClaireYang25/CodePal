@@ -81,9 +81,9 @@
     -   **任务**: 关闭 `CONFIG.API.GEMINI.ENABLED` 并在 `ai-service` 内静默跳过云端，消除无 Key 报错与日志；仅走 Regex → Nano。
     -   **现状**: 待落地。落地后控制台不再出现云端相关输出。
 
--   🟡 **行动 2.3：仅对“新未读验证码邮件”触发**
+-   ✅ **行动 2.3：仅对“新未读验证码邮件”触发**
     -   **任务**: 列表视图仅处理 `.zA.zE`（未读）线程；以 `data-legacy-last-message-id`/`data-thread-id` 去重；主题/摘要关键词预筛；不在“打开单封邮件正文视图”触发。
-    -   **现状**: 进行中。进一步收紧触发条件以杜绝旧邮件误触发。
+    -   **现状**: 已完成。未读线程首次出现时才触发提取，处理过的 ID 会持久化并裁剪为 200 条缓存。向后台发送时同时附带 `from/subject/snippet/ariaLabel/receivedAt/threadUrl` 元信息，为后续展示与模型推理提供上下文。
 
 -   🟡 **行动 2.4：自动呈现与来源信息**
     -   **任务**: 成功提取后优先尝试 `chrome.action.openPopup()`；若受限则以系统通知兜底（显示 OTP、发件人、主题等）。Popup 渲染 `from/subject/snippet` 源信息。
