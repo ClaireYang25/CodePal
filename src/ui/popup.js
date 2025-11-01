@@ -100,11 +100,13 @@ class PopupController {
 
         if (latestOtp && latestOtp.otp) {
             this.elements.otpValue.textContent = latestOtp.otp;
+            this.elements.otpValue.classList.remove('otp-empty');
             const timeAgo = this.formatTimeAgo(latestOtp.timestamp);
             const methodBadge = this.getMethodBadge(latestOtp.method);
             this.elements.otpTimestamp.textContent = `Found ${timeAgo} ${methodBadge}`;
         } else {
-            this.elements.otpValue.textContent = '-- -- -- --';
+            this.elements.otpValue.textContent = '—';
+            this.elements.otpValue.classList.add('otp-empty');
             this.elements.otpTimestamp.textContent = 'Waiting for new OTP emails...';
         }
     }
@@ -267,7 +269,7 @@ class PopupController {
 
     async copyOtpToClipboard() {
         const otp = this.elements.otpValue.textContent;
-        if (otp && !otp.includes('-')) {
+        if (otp && !this.elements.otpValue.classList.contains('otp-empty')) {
             await navigator.clipboard.writeText(otp);
             const originalText = this.elements.otpTimestamp.textContent;
             this.elements.otpTimestamp.textContent = 'Copied to clipboard!';

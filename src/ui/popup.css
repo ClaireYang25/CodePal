@@ -105,6 +105,12 @@ main {
     font-family: 'SF Mono', 'Menlo', 'Courier New', monospace;
 }
 
+#otp-value.otp-empty {
+    letter-spacing: 0;
+    color: var(--text-tertiary);
+    opacity: 0.6;
+}
+
 .otp-code:hover {
     transform: scale(1.05);
 }
