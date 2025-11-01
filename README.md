@@ -73,7 +73,7 @@ _The result? You stay focused. You stay secure. You stop tab-switching._
 1.  **Prepare Chrome**: Use Chrome 120+ and enable the Prompt API at `chrome://flags/#prompt-api-for-gemini-nano`.
 2.  **Load the Extension**: Open `chrome://extensions`, enable **Developer mode**, click **Load unpacked**, and select this project's folder.
 3.  **One-Time AI Download**: The first time you open the CodePal popup, you may be prompted to download the Gemini Nano model. This is a quick, one-time setup that enables all on-device AI features.
-4.  **See the Magic**: Keep a Gmail tab open in the background. When you receive an OTP email, the CodePal popup will appear automatically with your code, ready to be copied with a single click.
+4.  **See the Magic**: Keep a Gmail tab open in the background. When you receive an OTP email(from any webpage), the CodePal popup will appear automatically with your code, ready to be copied with a single click.
 
 > **For a full testing guide**, see [`docs/TEST_DASHBOARD.md`](docs/TEST_DASHBOARD.md).
 
