@@ -2,11 +2,10 @@
   <img src="assets/icons/CodePal.png" alt="CodePal Logo" width="128"/>
   <h1 align="center">CodePal</h1>
   <p align="center">
-    Stay in your flow. We'll get the code.
+    <em>Stay in your flow. We'll get the code.</em>
   </p>
 </div>
 
----
 
 ### Is this you?
 
