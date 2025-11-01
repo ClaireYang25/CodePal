@@ -64,7 +64,7 @@ class BackgroundService {
         [CONFIG.ACTIONS.EXTRACT_OTP]: () => this.handleExtractOTP(request, sendResponse),
         [CONFIG.ACTIONS.TEST_GEMINI_NANO]: () => this.handleTestGeminiNano(sendResponse),
         [CONFIG.ACTIONS.TEST_GEMINI_API]: () => this.handleTestGeminiAPI(sendResponse),
-        [CONFIG.ACTIONS.OTP_INTENT_SIGNAL]: () => this.handleOtpIntentSignal(request, sendResponse)
+        [CONFIG.ACTIONS.OTP_INTENT_SIGNAL]: () => this.handleOtpIntentSignal(request, sender, sendResponse)
       };
 
       const handler = handlers[request.action];
@@ -265,24 +265,65 @@ class BackgroundService {
    * Request the content script to perform autofill.
    */
   async requestAutofill(otp) {
+    if (!otp) {
+      return;
+    }
+
+    const targets = [];
+    const now = Date.now();
+
+    if (this.latestOtpIntent && typeof this.latestOtpIntent.tabId === 'number') {
+      const age = now - (this.latestOtpIntent.timestamp || 0);
+      if (age <= CONFIG.HIGH_ALERT.WINDOW_MS * 1.5) {
+        targets.push({
+          tabId: this.latestOtpIntent.tabId,
+          frameId: this.latestOtpIntent.frameId,
+          url: this.latestOtpIntent.sourceUrl || this.latestOtpIntent.tabUrl || '',
+          reason: 'intent-target'
+        });
+      }
+    }
+
     try {
-      const tabs = await chrome.tabs.query({ url: "*://mail.google.com/*" });
-      for (const tab of tabs) {
-        try {
-          await chrome.tabs.sendMessage(tab.id, {
-            action: CONFIG.ACTIONS.FILL_OTP,
-            otp
-          });
-          console.log(`📬 Sent autofill request to tab ${tab.id}`);
-        } catch (err) {
-          // If content script is not present on the tab, ignore
-          if (!String(err?.message || '').includes('Receiving end does not exist')) {
-            console.warn(`Autofill message to tab ${tab.id} failed:`, err?.message || err);
-          }
-        }
+      const gmailTabs = await chrome.tabs.query({ url: '*://mail.google.com/*' });
+      for (const tab of gmailTabs) {
+        if (!tab || typeof tab.id !== 'number') continue;
+        if (targets.some(target => target.tabId === tab.id)) continue;
+        targets.push({ tabId: tab.id, reason: 'gmail-fallback' });
       }
     } catch (error) {
-      console.error('Autofill broadcast failed:', error.message);
+      console.warn('⚠️ Failed to enumerate Gmail tabs for autofill:', error?.message || error);
+    }
+
+    if (!targets.length) {
+      console.log('ℹ️ No eligible tabs found for OTP autofill notification.');
+      return;
+    }
+
+    for (const target of targets) {
+      try {
+        const message = {
+          action: CONFIG.ACTIONS.FILL_OTP,
+          otp,
+          meta: {
+            reason: target.reason,
+            source: target.url || null
+          }
+        };
+
+        if (typeof target.frameId === 'number' && target.frameId >= 0) {
+          await chrome.tabs.sendMessage(target.tabId, message, { frameId: target.frameId });
+        } else {
+          await chrome.tabs.sendMessage(target.tabId, message);
+        }
+
+        console.log(`📬 Sent autofill request to tab ${target.tabId}${target.reason === 'intent-target' ? ' (intent source)' : ''}`);
+      } catch (err) {
+        const msg = String(err?.message || '');
+        if (!msg.includes('Receiving end does not exist')) {
+          console.warn(`Autofill message to tab ${target.tabId} failed:`, msg);
+        }
+      }
     }
   }
 
@@ -390,15 +431,23 @@ class BackgroundService {
     }
   }
 
-  async handleOtpIntentSignal(request, sendResponse) {
+  async handleOtpIntentSignal(request, sender, sendResponse) {
     try {
       const now = Date.now();
       this.highAlertUntil = now + CONFIG.HIGH_ALERT.WINDOW_MS;
+      const tabId = typeof sender?.tab?.id === 'number' ? sender.tab.id : null;
+      const frameId = typeof sender?.frameId === 'number' ? sender.frameId : null;
+      const tabUrl = sender?.tab?.url || request.sourceUrl || null;
+      const tabTitle = sender?.tab?.title || null;
       this.latestOtpIntent = {
         timestamp: now,
         sourceUrl: request.sourceUrl,
         hostname: request.hostname,
-        metadata: request.metadata || {}
+        metadata: request.metadata || {},
+        tabId,
+        frameId,
+        tabUrl,
+        tabTitle
       };
 
       await chrome.storage.local.set({
@@ -408,6 +457,9 @@ class BackgroundService {
 
       const host = this.latestOtpIntent.hostname || 'unknown';
       console.log(`🚨 OTP intent signal received from ${host}. High-alert until ${new Date(this.highAlertUntil).toLocaleTimeString()}`);
+      if (typeof tabId === 'number') {
+        console.log(`🎯 Autofill target pinned to tab ${tabId}${typeof frameId === 'number' ? ` (frame ${frameId})` : ''}.`);
+      }
       sendResponse({ success: true });
     } catch (error) {
       console.error('❌ Failed to process OTP intent signal:', error);
