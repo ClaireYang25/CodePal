@@ -1,11 +1,11 @@
 /**
- * Gmail OTP AutoFill - Configuration Constants
+ * CodePal - Configuration Constants
  * Centralized configuration to avoid hard-coding
  */
 
 export const CONFIG = {
   // Extension metadata
-  EXTENSION_NAME: 'Gmail OTP AutoFill',
+  EXTENSION_NAME: 'CodePal',
   VERSION: '1.0.0',
   
   // Storage keys

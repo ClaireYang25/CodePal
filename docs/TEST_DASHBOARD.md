@@ -1,66 +1,67 @@
-# Test Dashboard 使用说明
+# Test Dashboard Guide
 
-## 1. 背景与目标
+## 1. Background & Goals
 
-为了承接 Hackathon 冲刺阶段的“回归测试”与“智能自动填充”任务，我们构建了一个本地 `test-dashboard.html` 仿真页面，配合部署在 Google Apps Script 上的邮件发送脚本，以实现以下目标：
+To support the regression testing and autofill feature development during the hackathon sprint, we've built a local `test-dashboard.html` page. When paired with an optional Google Apps Script for sending emails, it achieves the following goals:
 
-- **可重复的端到端测试**：一键触发不同类型的 OTP 邮件（简单 / 复杂 / 多语言 / 短验证码 / 非 OTP），验证提取链路的稳定性。
-- **主动感知与 Autofill 验证**：页面内提供多种常见形态的 OTP 输入框，可直接测试内容脚本的高警戒信号与自动填充逻辑。
-- **减少人工操作成本**：避免在 Gmail 中手动撰写测试邮件，提升回归频率与效率。
-
----
-
-## 2. 文件结构
-
-- `test-dashboard.html`
-  - 本地测试页面，包含 OTP 输入框、发送测试邮件的按钮与状态提示。
-- Google Apps Script（Web App）
-  - 作为后端发送测试邮件，部署后获取 URL 并注入到 `test-dashboard.html` 中（`const appsScriptUrl = '...'`）。
+-   **Repeatable End-to-End Testing**: Trigger different types of OTP emails (Simple, Complex, Multilingual, Short, Non-OTP) with a single click to verify the stability of the entire extraction pipeline.
+-   **Intent & Autofill Validation**: The page provides various common OTP input fields to directly test the content script's high-alert signals and autofill logic.
+-   **Reduced Manual Effort**: Avoids the need to manually compose test emails in Gmail, increasing the frequency and efficiency of regression testing.
 
 ---
 
-## 3. 构建步骤记录
+## 2. File Structure
 
-1. **创建/更新 Apps Script**
-   - 访问 Google Apps Script（同一 Gmail 账户下）。
-   - 粘贴 `doGet(e)` 代码，内部根据 `type` 参数构造不同格式的邮件，并发送到自己的 Gmail。
-   - 将 `recipient` 修改为当前测试账户邮箱。
-
-2. **部署为 Web App**
-   - 选择 “部署 → 新建部署 → Web 应用”。
-   - `执行为` 选择“我”，`谁有权访问` 选择“任何人”。
-   - 完成部署后复制 Web App URL。
-
-3. **更新测试页面**
-   - 在 `test-dashboard.html` 中，将 `const appsScriptUrl = 'YOUR_APPS_SCRIPT_URL';` 替换为刚刚生成的 URL。
-
-4. **本地打开测试页面**
-   - 直接用 Chrome 打开 `test-dashboard.html`。
-   - 建议同时打开 Extension 的 Service Worker 控制台，用于观察日志。
+-   `test-dashboard.html`
+    -   The local test page containing OTP input fields, buttons to send test emails, and a status display.
+-   Google Apps Script (Web App)
+    -   (Optional) Acts as a backend to send test emails. Once deployed, its URL is added to `test-dashboard.html` (in `const appsScriptUrl = '...'`).
 
 ---
 
-## 4. 使用指南
+## 3. Setup Steps
 
-1. **Autofill 触发**
-   - 在页面内任意一个 OTP 输入框中聚焦。
-   - 确认后台日志中出现“高警戒”信号（待 Autofill 功能完成后可验证自动填充效果）。
+1.  **Create/Update the Apps Script**
+    -   Visit Google Apps Script under the same Google account.
+    -   Paste in the `doGet(e)` code, which constructs different emails based on the `type` parameter and sends them to your own Gmail address.
+    -   Update the `recipient` variable to your test email address.
 
-2. **发送测试邮件**
-   - 点击对应按钮（Simple / Complex / Multilingual / Short / Non-OTP）。
-   - `status` 提示区域会显示发送结果。
-   - 几秒后在 Gmail 收件箱中可看到对应测试邮件。
+2.  **Deploy as a Web App**
+    -   Click "Deploy" -> "New deployment" -> "Web app".
+    -   Set "Execute as" to "Me".
+    -   Set "Who has access" to "Anyone".
+    -   Copy the generated Web App URL after deploying.
 
-3. **观察插件行为**
-   - 保持 Gmail 标签页在后台，观察 Service Worker 与 Popup 是否自动更新。
-   - 待 Autofill 功能完成后，验证输入框是否被自动填入 OTP。
+3.  **Update the Test Page**
+    -   In `test-dashboard.html`, replace `YOUR_APPS_SCRIPT_URL` in the `appsScriptUrl` constant with the URL you just copied.
+
+4.  **Open the Test Page Locally**
+    -   Open `test-dashboard.html` directly in Chrome (or preferably, via a local web server).
+    -   It's recommended to have the extension's Service Worker console open to monitor logs.
 
 ---
 
-## 5. 后续工作
+## 4. Usage Guide
 
-- 当前文档仅覆盖测试页面的构建与使用流程。
-- 下一步计划：
-  1. 在内容脚本与 Service Worker 中实现 OTP 自动填充逻辑。
-  2. 完成回归测试清单（参考 `docs/HACKATHON_PLAN.md` 第二阶段）。
-  3. 根据测试结果迭代 UI/UX 与文档。
+1.  **Triggering Autofill**
+    -   Focus on any of the OTP input fields on the page.
+    -   Confirm that a "high-alert" signal appears in the background logs. This primes the extension for autofill.
+
+2.  **Sending Test Emails**
+    -   Click the corresponding button (e.g., Simple, Complex, Multilingual, Short, Non-OTP).
+    -   The status area will show the result of the send request.
+    -   The test email should appear in your Gmail inbox within a few seconds.
+
+3.  **Observing Extension Behavior**
+    -   Keep a Gmail tab running in the background and observe if the Service Worker and Popup update automatically.
+    -   Once the autofill feature is triggered, verify that the OTP is correctly filled into the input field you focused on.
+
+---
+
+## 5. Next Steps
+
+-   This document covers the setup and usage of the test dashboard.
+-   The next steps involve:
+    1.  Implementing the OTP autofill logic in the content scripts and Service Worker.
+    2.  Completing the regression test checklist (see Phase 2 of `docs/HACKATHON_PLAN.md`).
+    3.  Iterating on UI/UX and documentation based on test results.

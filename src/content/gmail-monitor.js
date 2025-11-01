@@ -1,5 +1,5 @@
 /**
- * Gmail OTP AutoFill - Content Script
+ * CodePal - Content Script
  * Monitors Gmail page for new emails and sends their content to the service worker.
  * Its a single-responsibility script: Watch DOM -> Extract Raw Text -> Send to Background.
  */

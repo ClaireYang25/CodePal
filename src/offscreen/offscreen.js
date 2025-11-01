@@ -1,5 +1,5 @@
 /**
- * Gmail OTP AutoFill - Offscreen Document
+ * CodePal - Offscreen Document
  * Provides window context for Gemini Nano execution
  * This is necessary because Service Workers don't have window object
  */

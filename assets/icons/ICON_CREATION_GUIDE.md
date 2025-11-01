@@ -1,4 +1,6 @@
-# Gmail OTP AutoFill - 图标创建指南
+# CodePal - 图标创建指南
+
+本文档记录了 CodePal 项目图标的设计思路、Figma 源文件链接以及导出规范。
 
 ## 🎨 创建扩展图标
 

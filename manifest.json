@@ -1,8 +1,8 @@
 {
   "manifest_version": 3,
-  "name": "Gmail OTP AutoFill",
+  "name": "CodePal",
   "version": "1.0.0",
-  "description": "Never type a Gmail verification code again. Our extension securely finds and fills OTPs for you, providing a seamless mobile-like experience on your desktop.",
+  "description": "CodePal intelligently finds and surfaces verification codes from your emails, so you can stop switching tabs and stay in the flow.",
   
   "permissions": [
     "storage",
@@ -37,7 +37,7 @@
   
   "action": {
     "default_popup": "src/ui/popup.html",
-    "default_title": "Gmail OTP AutoFill"
+    "default_title": "CodePal"
   },
   
   "icons": {

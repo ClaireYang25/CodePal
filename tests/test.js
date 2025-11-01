@@ -1,5 +1,5 @@
 /**
- * Gmail OTP AutoFill - 测试脚本
+ * CodePal - 测试脚本
  * 用于验证扩展的基本功能
  */
 
@@ -92,7 +92,7 @@ function testStorage() {
 
 // 运行所有测试
 function runAllTests() {
-    console.log('🚀 开始运行 Gmail OTP AutoFill 测试...');
+    console.log('🚀 开始运行 CodePal 测试...');
     console.log('=====================================');
     
     testOTPEngine();

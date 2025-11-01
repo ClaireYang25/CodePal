@@ -1,5 +1,5 @@
 /**
- * Gmail OTP AutoFill - Popup Controller
+ * CodePal - Popup Controller
  * Manages the redesigned, minimalist popup UI
  */
 

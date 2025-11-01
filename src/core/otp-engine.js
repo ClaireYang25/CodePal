@@ -1,6 +1,7 @@
 /**
- * Gmail OTP AutoFill - OTP Recognition Engine
- * Multi-language OTP recognition rules and local matching system
+ * CodePal - OTP Recognition Engine
+ * Implements local, regex-based OTP extraction as the first tier of the engine.
+ * This approach is fast, private, and covers a high percentage of common OTP formats.
  */
 
 import { CONFIG } from '../config/constants.js';

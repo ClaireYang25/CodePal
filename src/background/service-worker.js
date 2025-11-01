@@ -1,5 +1,5 @@
 /**
- * Gmail OTP AutoFill - Service Worker
+ * CodePal - Service Worker
  * Core background service implementing three-tier intelligent OTP extraction engine:
  * 1. Local Regex (fast, private, 90%+ coverage)
  * 2. Gemini Nano (on-device AI, via offscreen document)
@@ -539,5 +539,5 @@ class BackgroundService {
 // Initialize background service
 new BackgroundService();
 
-console.log('🚀 Gmail OTP AutoFill - Service Worker Active');
+console.log('🚀 CodePal - Service Worker Active');
 console.log('📊 Architecture: Content Script → Service Worker → [Regex | Nano | API]');
